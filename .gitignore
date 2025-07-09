@@ -1,0 +1,63 @@
+# This file is used to specify files and directories to be ignored by Git.
+
+# private files
+OLD/
+**/*.p.md      # Private notes (e.g., notes that are not meant to be shared)
+**/*.p.ts      # Private files for ref (e.g., files for ref that are not meant to be shared)
+*.gitignore  # self
+dist/
+note/
+obsidian.css
+
+!**/*.ts
+!**/*.md
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+dist/          # Compiled output (e.g., from TypeScript, Webpack, Rollup)
+build/         # Another common compiled output directory
+*.tsbuildinfo  # TypeScript build info files
+.env           # Environment variables (sensitive info!)
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# IDEs and Editors
+.vscode/        # VS Code specific files (e.g., settings, launch configs)
+.idea/          # IntelliJ IDEA specific files
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# Logs
+logs/
+*.log
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Dependencies
+# virtualenv, pip, conda, etc. (for Python, if mixed project)
+# venv/
+# __pycache__/
+# *.pyc
+
+# Local development server files
+tmp/
+*.tmp
+readme0.p.md
+note.p.md
+main.p.ts

@@ -1,0 +1,203 @@
+{
+  "serviceExePath": "E:\\GoldenDict\\WebDict\\SilverDict\\env\\python.exe",
+  "serviceStartScript": "E:\\GoldenDict\\WebDict\\SilverDict\\Silver Dict CMD.lnk",
+  "apiBaseUrl": "http://localhost:2628/api/query/WM/{word}",
+  "replaceRulesText": "h2.dre,h4.dre\nh2.ure,h4.ure",
+  "markdownReplaceRulesSummary": "/[ \\t]+\\n/g,\\n\n/\\n{2,}/g,\\n\n/## 韦泊英汉快查词典\\n/,\n/^### /g,#### \n/\\n+$/,\\n\\n\n/\\*\\*\\n([^\\n])/g, ** $1\n/\\*\\*([0-9a-z^ ]{1,2}) \\*\\*/g,**$1**",
+  "markdownReplaceRulesAll": "/[ \\t]+\\n/g,\\n\n/\\n{2,}/g,\\n\n/## 韦泊英汉快查词典\\n/,\n/^### /g,#### \n/\\n+$/,\\n\\n\n/\\*\\*\\n([^\\n])/g, ** $1\n/\\*\\*([0-9a-z^ ]{1,2}) \\*\\*/g,**$1**",
+  "copySummaryPrefix": "## {{word}}\n",
+  "copySummarySuffix": "\n",
+  "copyAllPrefix": "## {{word}}\n",
+  "copyAllSuffix": "\n",
+  "simplifiedGlobalHideSelectors": "",
+  "simplifiedHideSelectors": ".snote\n.bc\nspan.def_text\n.vis_w\n.un_text",
+  "simplifiedShowInHiddenSelectors": ".uro_def>.mw_zh\n.un_text>.mw_zh\n.vis_w>.wm_zh\n.snote>.wm_zh",
+  "history": [
+    {
+      "word": "cream",
+      "time": "20250708 091845"
+    },
+    {
+      "word": "garden",
+      "time": "20250709 031317"
+    },
+    {
+      "word": "apple",
+      "time": "20250709 032341"
+    },
+    {
+      "word": "insect",
+      "time": "20250709 032417"
+    },
+    {
+      "word": "car",
+      "time": "20250709 051716"
+    },
+    {
+      "word": "going",
+      "time": "20250709 052140"
+    },
+    {
+      "word": "went",
+      "time": "20250709 052245"
+    },
+    {
+      "word": "hello",
+      "time": "20250709 073013"
+    },
+    {
+      "word": "that",
+      "time": "20250709 074356"
+    },
+    {
+      "word": "name",
+      "time": "20250709 090243"
+    },
+    {
+      "word": "plant",
+      "time": "20250709 090257"
+    },
+    {
+      "word": "leaves",
+      "time": "20250709 091128"
+    },
+    {
+      "word": "elephant",
+      "time": "20250709 091336"
+    },
+    {
+      "word": "rename",
+      "time": "20250709 100205"
+    },
+    {
+      "word": "thing",
+      "time": "20250709 102145"
+    },
+    {
+      "word": "flower",
+      "time": "20250709 102154"
+    },
+    {
+      "word": "other",
+      "time": "20250709 102228"
+    },
+    {
+      "word": "movement",
+      "time": "20250709 102234"
+    },
+    {
+      "word": "need",
+      "time": "20250709 102522"
+    },
+    {
+      "word": "sometimes",
+      "time": "20250709 102710"
+    },
+    {
+      "word": "also",
+      "time": "20250709 102733"
+    },
+    {
+      "word": "_vegetable_",
+      "time": "20250709 102838"
+    },
+    {
+      "word": "noncount",
+      "time": "20250709 102844"
+    },
+    {
+      "word": "401(k)",
+      "time": "20250709 102853"
+    },
+    {
+      "word": "grow",
+      "time": "20250709 232332"
+    },
+    {
+      "word": "spring",
+      "time": "20250709 232341"
+    },
+    {
+      "word": "British",
+      "time": "20250709 233252"
+    },
+    {
+      "word": "because",
+      "time": "20250709 235304"
+    },
+    {
+      "word": "sun",
+      "time": "20250709 235431"
+    },
+    {
+      "word": "ground",
+      "time": "20250709 235440"
+    },
+    {
+      "word": "moveon",
+      "time": "20250709 235509"
+    },
+    {
+      "word": "usually",
+      "time": "20250709 235859"
+    },
+    {
+      "word": "are",
+      "time": "20250710 000715"
+    },
+    {
+      "word": "whose",
+      "time": "20250710 000759"
+    },
+    {
+      "word": "forgotten",
+      "time": "20250710 000808"
+    },
+    {
+      "word": "forget",
+      "time": "20250710 000813"
+    },
+    {
+      "word": "this",
+      "time": "20250710 014712"
+    },
+    {
+      "word": "vegetable",
+      "time": "20250710 024107"
+    },
+    {
+      "word": "pod",
+      "time": "20250710 024732"
+    },
+    {
+      "word": "okra",
+      "time": "20250710 024956"
+    },
+    {
+      "word": "and",
+      "time": "20250710 030413"
+    },
+    {
+      "word": "soup",
+      "time": "20250710 030909"
+    },
+    {
+      "word": "stew",
+      "time": "20250710 031533"
+    },
+    {
+      "word": "used",
+      "time": "20250710 031536"
+    },
+    {
+      "word": "eat",
+      "time": "20250710 031538"
+    }
+  ],
+  "maxHistory": 500,
+  "currentHistoryIndex": 44,
+  "copyAllLogPath": "[all.md]",
+  "copySummaryLogPath": "[12][3.md]",
+  "contextMenuLogPath": "[456.md]",
+  "doubleClickDelay": 300
+}
