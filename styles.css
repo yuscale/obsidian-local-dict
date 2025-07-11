@@ -1,3 +1,5 @@
+
+/*      以下为 Local Dictionary 的界面样式   最好不要修改    */
 /* 确保 view-content 使用相对定位，允许其子元素绝对定位 */
 .view-content {
     position: relative;
@@ -75,107 +77,7 @@
     background-color: var(--background-modifier-hover);
 }
 
-/* 隐藏词典的头部信息 */
-.local-dict-html .dictionary-headings {
-    display: none;
-}
-
-.mw_zh::before {
-    content: ' ';
-}
-
-/* 缩小 ul 项间距 */
-.local-dict-html ul {
-    margin-top: 0.2em;
-    margin-bottom: 0.2em;
-    padding-left: 0.7em !important;
-}
-
-/* 分割线 */
-.dro,
-.sblock.sblock_entry {
-    border-top: 1px solid var(--divider-color);
-}
-
-.mw_zh {
-    font-size: 0.85rem;
-}
-
-/* 主词 */
-span.hw_txt.gfont>a.href,
-h3.hw_txt.gfont,
-span.hw_txt.gfont,
-.hw_txt.gfont {
-    font-size: larger;
-    color: var(--text-accent);
-    font-weight: bold !important;
-    margin: 0;
-}
-
-/* 参考词 */
-.strong {
-    color: var(--text-accent);
-}
-
-/* 变形词 —— 的 */
-.ure {
-    margin: 0em;
-    font-size: 1rem;
-    color: var(--text-accent);
-    font-weight: bold;
-}
-
-/* 词组 */
-.dre {
-    margin: 0;
-    font-size: 1rem;
-}
-
-.mw_spm_it {
-    color: var(--color-purple);
-}
-
-/* 取消数字后的换行 */
-.sblock_c {
-    display: flex;
-    align-items: flex-start;
-    gap: 4px;
-    padding-top: 0;
-    margin-top: 4px;
-}
-
-.sn_block_num {
-    white-space: nowrap;
-    color: var(--text-accent);
-}
-
-.scnt {
-    flex: 1;
-    font-size: 0.9rem;
-}
-
-/* 边框 */
-.entry.entry_v2.boxy {
-    padding-bottom: 4px;
-    border-bottom: 3px solid darkgray;
-}
-
-/* 斜体 */
-.pvl {
-    font-style: italic;
-}
-
-/* formal US 等单词 */
-.sl,
-.ssla {
-    font-family: monospace;
-    letter-spacing: -0.05em;
-}
-
-.mw_zh~.un_text {}
-
-/* 自己的 button 样式 <全部简略> */
-.local-dict-toggle-btn {
+local-dict-toggle-btn {
     background: var(--background-modifier-hover);
     border: 1px solid var(--divider-color);
     border-radius: 6px;
@@ -309,6 +211,8 @@ span.hw_txt.gfont,
     border-radius: 0 4px 4px 0;
 }
 
+
+
 .history-btn {
     border-radius: 0;
 }
@@ -393,3 +297,109 @@ span.hw_txt.gfont,
     border-right-color: var(--text-accent);
     border-left-color: var(--text-accent);
 }
+
+
+/*      以上为 Local Dictionary 的界面样式       */
+/*      以下为词典显示的样式，可以自行添加       */
+
+
+/* 隐藏词典的头部信息 */
+.local-dict-html .dictionary-headings {
+    display: none;
+}
+
+.mw_zh::before {
+    content: ' ';
+}
+
+/* 缩小 ul 项间距 */
+.local-dict-html ul {
+    margin-top: 0.2em;
+    margin-bottom: 0.2em;
+    padding-left: 0.7em !important;
+}
+
+/* 分割线 */
+.dro,
+.sblock.sblock_entry {
+    border-top: 1px solid var(--divider-color);
+}
+
+.mw_zh {
+    font-size: 0.85rem;
+}
+
+/* 主词 */
+span.hw_txt.gfont>a.href,
+h3.hw_txt.gfont,
+span.hw_txt.gfont,
+.hw_txt.gfont {
+    font-size: larger;
+    color: var(--text-accent);
+    font-weight: bold !important;
+    margin: 0;
+}
+
+/* 参考词 */
+.strong {
+    color: var(--text-accent);
+}
+
+/* 变形词 —— 的 */
+.ure {
+    margin: 0em;
+    font-size: 1rem;
+    color: var(--text-accent);
+    font-weight: bold;
+}
+
+/* 词组 */
+.dre {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.mw_spm_it {
+    color: var(--color-purple);
+}
+
+/* 取消数字后的换行 */
+.sblock_c {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    padding-top: 0;
+    margin-top: 4px;
+}
+
+.sn_block_num {
+    white-space: nowrap;
+    color: var(--text-accent);
+}
+
+.scnt {
+    flex: 1;
+    font-size: 0.9rem;
+}
+
+/* 边框 */
+.entry.entry_v2.boxy {
+    padding-bottom: 4px;
+    border-bottom: 3px solid darkgray;
+}
+
+/* 斜体 */
+.pvl {
+    font-style: italic;
+}
+
+/* formal US 等单词 */
+.sl,
+.ssla {
+    font-family: monospace;
+    letter-spacing: -0.05em;
+}
+
+
+/* 自己的 button 样式 <全部简略> */
+.
