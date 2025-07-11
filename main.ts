@@ -1493,6 +1493,9 @@ class LocalDictSettingTab extends PluginSettingTab {
       )
       .addTextArea((text) => {
         text
+          .setPlaceholder(
+            `示例：\n.entry > .ure\n.example > span.note\n.highlight`
+          )
           .setValue(this.plugin.settings.simplifiedShowInHiddenSelectors)
           .onChange(async (value) => {
             this.plugin.settings.simplifiedShowInHiddenSelectors = value;

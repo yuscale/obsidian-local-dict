@@ -5,7 +5,7 @@ Created Date: 2025-07-09 08:59:39 Wednesday
 Author: Scale Yu
 E-mail: yuscale@126.com
 
-Last Modified: 2025-07-11 19:13:04 Friday
+Last Modified: 2025-07-11 19:32:03 Friday
 Modified By: Scale Yu
 ---
 
@@ -362,6 +362,24 @@ npm run dev
 | 替换规则（复制全部） | 将复制内容替换为 Markdown，支持正则表达式（每行一条） |
 | 替换规则（复制简略） | 与上类似，适用于简略视图 |
 | 复制前缀 / 后缀（全部 / 简略） | 可分别为两种复制模式设置添加的前缀与后缀 |
+
+
+#### 📌 示例
+假设你设置：
+
+前缀 = "# {{word}} 查词于 {{YYYY-MM-DD}}\\n---"
+
+后缀 = "\\n来源：本地词典\\n"
+
+查询 example，Markdown 内容为 **some content**，生成结果将为：
+
+```md
+# example 查词于 2025-07-11
+---
+**some content**
+来源：本地词典
+```
+
 
 ### 🕘 查询历史记录
 

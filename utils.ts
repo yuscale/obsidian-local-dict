@@ -50,27 +50,71 @@ export function insertToActiveEditor(app: App, text: string) {
 }
 
 
+export async function appendToFile0(
+  app: App,
+  filePath: string,
+  content: string
+) {
+  const path = normalizePath(filePath);
+  console.log("path:", path);
+  const existing = app.vault.getAbstractFileByPath(path);
+  console.log("existing:", existing);
+  if (!existing) {
+    // new Notice(`文件 ${path} 不存在`);
+    await app.vault.create(path, "")
+    new Notice(`新建 ${path} 文件`);
+  }
+  
+  if (existing instanceof TFile) {
+    const old = await app.vault.read(existing);
+    await app.vault.modify(existing, old + "\n" + content);
+    new Notice(`已添加至 ${path} 文件`);
+  }
+}
+
+
+/**
+ * 将 content 追加到指定 Markdown 文件末尾。
+ * 若文件不存在则自动创建。
+ */
 export async function appendToFile(
   app: App,
   filePath: string,
   content: string
 ) {
   const path = normalizePath(filePath);
-  // console.log("path:", path);
-  const existing = app.vault.getAbstractFileByPath(path);
-  // console.log("existing:", existing);
-  if (!existing) {
-    new Notice(`文件 ${path} 不存在`);
+  const { vault } = app;
+
+  let targetFile = vault.getAbstractFileByPath(path) as TFile | null;
+
+  // 若不存在，则递归创建文件夹并创建新文件
+  if (!targetFile) {
+    const dir = path.substring(0, path.lastIndexOf("/"));
+    if (dir && !vault.getAbstractFileByPath(dir)) {
+      await vault.createFolder(dir).catch(() => {}); // 忽略已存在报错
+    }
+
+    try {
+      targetFile = await vault.create(path, content);
+      new Notice(`已创建文件：${path}`);
+      return; // 已写入内容，无需再追加
+    } catch (err) {
+      new Notice(`无法创建文件：${path}`);
+      console.error(err);
+      return;
+    }
   }
 
-  if (existing instanceof TFile) {
-    const old = await app.vault.read(existing);
-    await app.vault.modify(existing, old + "\n" + content);
-  } else {
-    await app.vault.create(path, content);
+  // 已存在：读取旧内容并追加
+  try {
+    const old = await vault.read(targetFile);
+    await vault.modify(targetFile, old + "\n" + content);
+    new Notice(`已追加内容到：${path}`);
+  } catch (err) {
+    new Notice(`写入文件失败：${path}`);
+    console.error(err);
   }
 }
-
 
 
 
@@ -501,10 +545,9 @@ export function injectGoldenDictLinkAllAsBlock(doc: Document | HTMLElement) {
 
 
 
-
-
 /**
  * 使用模板格式化 Markdown 输出。
+ * 支持转义字符：\n, \t, \\, \,
  * @param word 当前查询单词
  * @param markdown Markdown 内容（已处理好）
  * @param prefixTpl 前缀模板（支持 {{word}} 和任意 moment 格式）
@@ -516,7 +559,46 @@ export function formatMarkdownOutput(
   prefixTpl: string,
   suffixTpl: string
 ): string {
-  const render = (tpl: string) =>
+  const render = (tpl: string) => {
+    const replaced = tpl.replace(/\{\{(.*?)\}\}/g, (_, token) => {
+      token = token.trim();
+      if (token === "word") return word;
+      try {
+        return moment().format(token); // 例如 {{YYYY-MM-DD}}、{{HH:mm}} 等
+      } catch (e) {
+        return `{{${token}}}`; // 保留原样，避免崩溃
+      }
+    });
+
+    // 处理转义字符：\n \t \\ \,
+    return replaced
+      .replace(/\\n/g, "\n")
+      .replace(/\\t/g, "\t")
+      .replace(/\\\\/g, "\\")
+      .replace(/\\,/g, ",");
+  };
+
+  const prefix = render(prefixTpl);
+  const suffix = render(suffixTpl);
+
+  return [prefix, markdown, suffix].filter(Boolean).join("\n");
+}
+
+
+/**
+ * 使用模板格式化 Markdown 输出。
+ * @param word 当前查询单词
+ * @param markdown Markdown 内容（已处理好）
+ * @param prefixTpl 前缀模板（支持 {{word}} 和任意 moment 格式）
+ * @param suffixTpl 后缀模板（支持 {{word}} 和任意 moment 格式）
+ */
+export function formatMarkdownOutput0(
+  word: string,
+  markdown: string,
+  prefixTpl: string,
+  suffixTpl: string
+): string {
+  const render = (tpl: string) => // todo   /t/n
     tpl.replace(/\{\{(.*?)\}\}/g, (_, token) => {
       token = token.trim();
       if (token === "word") return word;
@@ -554,7 +636,7 @@ export function applySimplifiedView(
     // applySimplifiedHide(container, settings.simplifiedHideSelectors);
     applySimplifiedHide(container, settings.simplifiedHideSelectors, settings.simplifiedShowInHiddenSelectors);
 
-    applySimplifiedShowInHidden(container, settings.simplifiedShowInHiddenSelectors);
+    applySimplifiedShowInHidden(container,settings.simplifiedHideSelectors, settings.simplifiedShowInHiddenSelectors);
   }
 }
 
@@ -608,7 +690,7 @@ export function applySimplifiedHide(
 ) {
   const hideSelectors = hideSelectorsText
     .split("\n")
-    .map(s => s.trim())
+    .map((s) => s.trim())
     .filter(Boolean);
 
   const showRules = showInHiddenText
@@ -616,21 +698,23 @@ export function applySimplifiedHide(
     : [];
 
   for (const selector of hideSelectors) {
-    const elements = Array.from(container.querySelectorAll<HTMLElement>(selector));
+    const elements = Array.from(
+      container.querySelectorAll<HTMLElement>(selector)
+    );
 
     for (const el of elements) {
       // 检查该元素是否匹配任何显示规则
-      const matchingRules = showRules.filter(rule =>
+      const matchingRules = showRules.filter((rule) =>
         el.matches(rule.parentSelector)
       );
 
       if (matchingRules.length > 0) {
         // 有显示子规则，不隐藏自己，但隐藏其他子元素
-        Array.from(el.children).forEach(child => {
-          const shouldKeep = matchingRules.some(rule =>
+        Array.from(el.children).forEach((child) => {
+          const shouldKeep = matchingRules.some((rule) =>
             child.matches(rule.childSelector)
           );
-if (!shouldKeep) (child as HTMLElement).style.display = "none";
+          if (!shouldKeep) (child as HTMLElement).style.display = "none";
         });
       } else {
         // 无需保留子元素，直接隐藏整个元素
@@ -641,7 +725,71 @@ if (!shouldKeep) (child as HTMLElement).style.display = "none";
 }
 
 
+/**
+ * 在“简略模式”里，从已被隐藏的父元素中重新显示指定子元素。
+ *
+ * @param container    根节点
+ * @param hideRulesStr 多行 hide‑selectors（仅用来判断哪些父元素已隐藏）
+ * @param showRulesStr 多行 show‑selectors；每行格式可以是：
+ *                     1) `parent > child`
+ *                     2) 只有一个选择器，视为 parent===child，都恢复显示
+ *
+ * 说明：
+ * 1. 该函数假设 applySimplifiedHide 已经执行过 —— 父元素可能被设为 display:none。
+ * 2. 逻辑：逐行读取 showRules，定位父元素 → 寻找要保留的子元素 → 把它们重新显示，
+ *    同时**保持未命中的兄弟节点继续隐藏**。
+ */
+export function applySimplifiedShowInHidden(
+  container: HTMLElement,
+  hideRulesStr: string,
+  showRulesStr: string
+) {
+  const showRules = showRulesStr
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("//"));
 
+  // —— Step‑1：把 showRules 解析成 { parentSel, childSel } 列表 ——
+  interface Rule { parent: string; child: string; }
+  const parsed: Rule[] = [];
+
+  for (const raw of showRules) {
+    const segs = raw.split(">").map((s) => s.trim()).filter(Boolean);
+    if (segs.length === 0) continue;
+
+    if (segs.length === 1) {
+      // 只有一个选择器：parent===child；后面逻辑里直接对 parent 恢复显示
+      parsed.push({ parent: segs[0], child: segs[0] });
+    } else {
+      parsed.push({
+        parent: segs.slice(0, -1).join(" > "),
+        child: segs[segs.length - 1],
+      });
+    }
+  }
+
+  // —— Step‑2：遍历规则，逐个恢复显示指定子元素 ——
+  parsed.forEach(({ parent, child }) => {
+    // ① 找到所有符合 parent 选择器的节点
+    Array.from(container.querySelectorAll(parent)).forEach((p) => {
+      const parentEl = p as HTMLElement;
+
+      // ② parent 以及其祖先可能被隐藏，先让祖先链显示（保持只是“被选中的链”）
+      let cur: HTMLElement | null = parentEl;
+      while (cur) {
+        if (cur.style.display === "none") cur.style.display = "";
+        // 到 container 顶就停
+        if (cur === container) break;
+        cur = cur.parentElement;
+      }
+
+      // ③ 显示匹配 childSel 的元素，其他兄弟继续保持隐藏
+      Array.from(parentEl.querySelectorAll(child)).forEach((c) => {
+        (c as HTMLElement).style.display = "";
+      });
+    });
+  });
+}
 
 
 
@@ -654,7 +802,7 @@ if (!shouldKeep) (child as HTMLElement).style.display = "none";
  * @param container 根容器
  * @param rulesStr 多行规则，每行格式为 `父选择器 > 子选择器`（支持子孙选择器）
  */
-export function applySimplifiedShowInHidden(container: HTMLElement, rulesStr: string) {
+export function applySimplifiedShowInHidden0(container: HTMLElement, rulesStr: string) {
   const rules = rulesStr
     .split("\n")
     .map(line => line.trim())
@@ -669,6 +817,61 @@ export function applySimplifiedShowInHidden(container: HTMLElement, rulesStr: st
       children.forEach(child => {
         (child as HTMLElement).style.display = "";
       });
+    });
+  }
+}
+
+
+/**
+ * 在已执行 applySimplifiedHide 之后调用
+ * @param container 根容器
+ * @param hideSelectorsStr settings.simplifiedHideSelectors（多行选择器，全部需要隐藏）
+ * @param showRulesStr     settings.simplifiedShowInHiddenSelectors（多行规则：parent > child）
+ */
+export function applySimplifiedShowInHidden_1(
+  container: HTMLElement,
+  hideSelectorsStr: string,
+  showRulesStr: string
+) {
+  // ① 解析 “需要隐藏” 的选择器数组
+  const hideSelectors = hideSelectorsStr
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("//")); // 跳过空行 / 注释
+
+  // ② 解析 “保留规则” parent > child
+  const rules = showRulesStr
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("//"));
+
+  for (const rule of rules) {
+    const [parentSel, childSel] = rule.split(">").map((s) => s.trim());
+    if (!parentSel || !childSel) continue;
+
+    // 找到所有 parent
+    const parents = container.querySelectorAll<HTMLElement>(parentSel);
+
+    parents.forEach((parent) => {
+      /* -----------------------------------------------------------
+         A. 先在「parent 内部」把 hideSelectors 指定的所有元素隐藏
+         （即使它们之前已隐藏，也再次确保）
+      ----------------------------------------------------------- */
+      hideSelectors.forEach((hideSel) => {
+        parent.querySelectorAll<HTMLElement>(hideSel).forEach((el) => {
+          el.style.display = "none";
+        });
+      });
+
+      /* -----------------------------------------------------------
+         B. 再把 childSel 指定的元素重新显示
+      ----------------------------------------------------------- */
+      parent.querySelectorAll<HTMLElement>(childSel).forEach((child) => {
+        child.style.display = "";
+      });
+
+      // ⚠️ 仅保证 parent 本身可见，**不**修改更高层祖先
+      parent.style.display = "";
     });
   }
 }
