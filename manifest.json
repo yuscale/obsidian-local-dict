@@ -1,10 +1,10 @@
 {
   "id": "local-dict",
   "name": "Local Dictionary",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "minAppVersion": "0.15.0",
   "description": "Lookup words locally and display meaning in right sidebar", 
   "author": "Scale Yu",
-  "authorUrl": "",
+  "authorUrl": "https://github.com/yuscale",
   "main": "main.js"
 }

@@ -2,6 +2,950 @@
 
 var obsidian = require('obsidian');
 
+function extend (destination) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = arguments[i];
+    for (var key in source) {
+      if (source.hasOwnProperty(key)) destination[key] = source[key];
+    }
+  }
+  return destination
+}
+
+function repeat (character, count) {
+  return Array(count + 1).join(character)
+}
+
+function trimLeadingNewlines (string) {
+  return string.replace(/^\n*/, '')
+}
+
+function trimTrailingNewlines (string) {
+  // avoid match-at-end regexp bottleneck, see #370
+  var indexEnd = string.length;
+  while (indexEnd > 0 && string[indexEnd - 1] === '\n') indexEnd--;
+  return string.substring(0, indexEnd)
+}
+
+var blockElements = [
+  'ADDRESS', 'ARTICLE', 'ASIDE', 'AUDIO', 'BLOCKQUOTE', 'BODY', 'CANVAS',
+  'CENTER', 'DD', 'DIR', 'DIV', 'DL', 'DT', 'FIELDSET', 'FIGCAPTION', 'FIGURE',
+  'FOOTER', 'FORM', 'FRAMESET', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HEADER',
+  'HGROUP', 'HR', 'HTML', 'ISINDEX', 'LI', 'MAIN', 'MENU', 'NAV', 'NOFRAMES',
+  'NOSCRIPT', 'OL', 'OUTPUT', 'P', 'PRE', 'SECTION', 'TABLE', 'TBODY', 'TD',
+  'TFOOT', 'TH', 'THEAD', 'TR', 'UL'
+];
+
+function isBlock (node) {
+  return is(node, blockElements)
+}
+
+var voidElements = [
+  'AREA', 'BASE', 'BR', 'COL', 'COMMAND', 'EMBED', 'HR', 'IMG', 'INPUT',
+  'KEYGEN', 'LINK', 'META', 'PARAM', 'SOURCE', 'TRACK', 'WBR'
+];
+
+function isVoid (node) {
+  return is(node, voidElements)
+}
+
+function hasVoid (node) {
+  return has(node, voidElements)
+}
+
+var meaningfulWhenBlankElements = [
+  'A', 'TABLE', 'THEAD', 'TBODY', 'TFOOT', 'TH', 'TD', 'IFRAME', 'SCRIPT',
+  'AUDIO', 'VIDEO'
+];
+
+function isMeaningfulWhenBlank (node) {
+  return is(node, meaningfulWhenBlankElements)
+}
+
+function hasMeaningfulWhenBlank (node) {
+  return has(node, meaningfulWhenBlankElements)
+}
+
+function is (node, tagNames) {
+  return tagNames.indexOf(node.nodeName) >= 0
+}
+
+function has (node, tagNames) {
+  return (
+    node.getElementsByTagName &&
+    tagNames.some(function (tagName) {
+      return node.getElementsByTagName(tagName).length
+    })
+  )
+}
+
+var rules = {};
+
+rules.paragraph = {
+  filter: 'p',
+
+  replacement: function (content) {
+    return '\n\n' + content + '\n\n'
+  }
+};
+
+rules.lineBreak = {
+  filter: 'br',
+
+  replacement: function (content, node, options) {
+    return options.br + '\n'
+  }
+};
+
+rules.heading = {
+  filter: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+
+  replacement: function (content, node, options) {
+    var hLevel = Number(node.nodeName.charAt(1));
+
+    if (options.headingStyle === 'setext' && hLevel < 3) {
+      var underline = repeat((hLevel === 1 ? '=' : '-'), content.length);
+      return (
+        '\n\n' + content + '\n' + underline + '\n\n'
+      )
+    } else {
+      return '\n\n' + repeat('#', hLevel) + ' ' + content + '\n\n'
+    }
+  }
+};
+
+rules.blockquote = {
+  filter: 'blockquote',
+
+  replacement: function (content) {
+    content = content.replace(/^\n+|\n+$/g, '');
+    content = content.replace(/^/gm, '> ');
+    return '\n\n' + content + '\n\n'
+  }
+};
+
+rules.list = {
+  filter: ['ul', 'ol'],
+
+  replacement: function (content, node) {
+    var parent = node.parentNode;
+    if (parent.nodeName === 'LI' && parent.lastElementChild === node) {
+      return '\n' + content
+    } else {
+      return '\n\n' + content + '\n\n'
+    }
+  }
+};
+
+rules.listItem = {
+  filter: 'li',
+
+  replacement: function (content, node, options) {
+    content = content
+      .replace(/^\n+/, '') // remove leading newlines
+      .replace(/\n+$/, '\n') // replace trailing newlines with just a single one
+      .replace(/\n/gm, '\n    '); // indent
+    var prefix = options.bulletListMarker + '   ';
+    var parent = node.parentNode;
+    if (parent.nodeName === 'OL') {
+      var start = parent.getAttribute('start');
+      var index = Array.prototype.indexOf.call(parent.children, node);
+      prefix = (start ? Number(start) + index : index + 1) + '.  ';
+    }
+    return (
+      prefix + content + (node.nextSibling && !/\n$/.test(content) ? '\n' : '')
+    )
+  }
+};
+
+rules.indentedCodeBlock = {
+  filter: function (node, options) {
+    return (
+      options.codeBlockStyle === 'indented' &&
+      node.nodeName === 'PRE' &&
+      node.firstChild &&
+      node.firstChild.nodeName === 'CODE'
+    )
+  },
+
+  replacement: function (content, node, options) {
+    return (
+      '\n\n    ' +
+      node.firstChild.textContent.replace(/\n/g, '\n    ') +
+      '\n\n'
+    )
+  }
+};
+
+rules.fencedCodeBlock = {
+  filter: function (node, options) {
+    return (
+      options.codeBlockStyle === 'fenced' &&
+      node.nodeName === 'PRE' &&
+      node.firstChild &&
+      node.firstChild.nodeName === 'CODE'
+    )
+  },
+
+  replacement: function (content, node, options) {
+    var className = node.firstChild.getAttribute('class') || '';
+    var language = (className.match(/language-(\S+)/) || [null, ''])[1];
+    var code = node.firstChild.textContent;
+
+    var fenceChar = options.fence.charAt(0);
+    var fenceSize = 3;
+    var fenceInCodeRegex = new RegExp('^' + fenceChar + '{3,}', 'gm');
+
+    var match;
+    while ((match = fenceInCodeRegex.exec(code))) {
+      if (match[0].length >= fenceSize) {
+        fenceSize = match[0].length + 1;
+      }
+    }
+
+    var fence = repeat(fenceChar, fenceSize);
+
+    return (
+      '\n\n' + fence + language + '\n' +
+      code.replace(/\n$/, '') +
+      '\n' + fence + '\n\n'
+    )
+  }
+};
+
+rules.horizontalRule = {
+  filter: 'hr',
+
+  replacement: function (content, node, options) {
+    return '\n\n' + options.hr + '\n\n'
+  }
+};
+
+rules.inlineLink = {
+  filter: function (node, options) {
+    return (
+      options.linkStyle === 'inlined' &&
+      node.nodeName === 'A' &&
+      node.getAttribute('href')
+    )
+  },
+
+  replacement: function (content, node) {
+    var href = node.getAttribute('href');
+    if (href) href = href.replace(/([()])/g, '\\$1');
+    var title = cleanAttribute(node.getAttribute('title'));
+    if (title) title = ' "' + title.replace(/"/g, '\\"') + '"';
+    return '[' + content + '](' + href + title + ')'
+  }
+};
+
+rules.referenceLink = {
+  filter: function (node, options) {
+    return (
+      options.linkStyle === 'referenced' &&
+      node.nodeName === 'A' &&
+      node.getAttribute('href')
+    )
+  },
+
+  replacement: function (content, node, options) {
+    var href = node.getAttribute('href');
+    var title = cleanAttribute(node.getAttribute('title'));
+    if (title) title = ' "' + title + '"';
+    var replacement;
+    var reference;
+
+    switch (options.linkReferenceStyle) {
+      case 'collapsed':
+        replacement = '[' + content + '][]';
+        reference = '[' + content + ']: ' + href + title;
+        break
+      case 'shortcut':
+        replacement = '[' + content + ']';
+        reference = '[' + content + ']: ' + href + title;
+        break
+      default:
+        var id = this.references.length + 1;
+        replacement = '[' + content + '][' + id + ']';
+        reference = '[' + id + ']: ' + href + title;
+    }
+
+    this.references.push(reference);
+    return replacement
+  },
+
+  references: [],
+
+  append: function (options) {
+    var references = '';
+    if (this.references.length) {
+      references = '\n\n' + this.references.join('\n') + '\n\n';
+      this.references = []; // Reset references
+    }
+    return references
+  }
+};
+
+rules.emphasis = {
+  filter: ['em', 'i'],
+
+  replacement: function (content, node, options) {
+    if (!content.trim()) return ''
+    return options.emDelimiter + content + options.emDelimiter
+  }
+};
+
+rules.strong = {
+  filter: ['strong', 'b'],
+
+  replacement: function (content, node, options) {
+    if (!content.trim()) return ''
+    return options.strongDelimiter + content + options.strongDelimiter
+  }
+};
+
+rules.code = {
+  filter: function (node) {
+    var hasSiblings = node.previousSibling || node.nextSibling;
+    var isCodeBlock = node.parentNode.nodeName === 'PRE' && !hasSiblings;
+
+    return node.nodeName === 'CODE' && !isCodeBlock
+  },
+
+  replacement: function (content) {
+    if (!content) return ''
+    content = content.replace(/\r?\n|\r/g, ' ');
+
+    var extraSpace = /^`|^ .*?[^ ].* $|`$/.test(content) ? ' ' : '';
+    var delimiter = '`';
+    var matches = content.match(/`+/gm) || [];
+    while (matches.indexOf(delimiter) !== -1) delimiter = delimiter + '`';
+
+    return delimiter + extraSpace + content + extraSpace + delimiter
+  }
+};
+
+rules.image = {
+  filter: 'img',
+
+  replacement: function (content, node) {
+    var alt = cleanAttribute(node.getAttribute('alt'));
+    var src = node.getAttribute('src') || '';
+    var title = cleanAttribute(node.getAttribute('title'));
+    var titlePart = title ? ' "' + title + '"' : '';
+    return src ? '![' + alt + ']' + '(' + src + titlePart + ')' : ''
+  }
+};
+
+function cleanAttribute (attribute) {
+  return attribute ? attribute.replace(/(\n+\s*)+/g, '\n') : ''
+}
+
+/**
+ * Manages a collection of rules used to convert HTML to Markdown
+ */
+
+function Rules (options) {
+  this.options = options;
+  this._keep = [];
+  this._remove = [];
+
+  this.blankRule = {
+    replacement: options.blankReplacement
+  };
+
+  this.keepReplacement = options.keepReplacement;
+
+  this.defaultRule = {
+    replacement: options.defaultReplacement
+  };
+
+  this.array = [];
+  for (var key in options.rules) this.array.push(options.rules[key]);
+}
+
+Rules.prototype = {
+  add: function (key, rule) {
+    this.array.unshift(rule);
+  },
+
+  keep: function (filter) {
+    this._keep.unshift({
+      filter: filter,
+      replacement: this.keepReplacement
+    });
+  },
+
+  remove: function (filter) {
+    this._remove.unshift({
+      filter: filter,
+      replacement: function () {
+        return ''
+      }
+    });
+  },
+
+  forNode: function (node) {
+    if (node.isBlank) return this.blankRule
+    var rule;
+
+    if ((rule = findRule(this.array, node, this.options))) return rule
+    if ((rule = findRule(this._keep, node, this.options))) return rule
+    if ((rule = findRule(this._remove, node, this.options))) return rule
+
+    return this.defaultRule
+  },
+
+  forEach: function (fn) {
+    for (var i = 0; i < this.array.length; i++) fn(this.array[i], i);
+  }
+};
+
+function findRule (rules, node, options) {
+  for (var i = 0; i < rules.length; i++) {
+    var rule = rules[i];
+    if (filterValue(rule, node, options)) return rule
+  }
+  return void 0
+}
+
+function filterValue (rule, node, options) {
+  var filter = rule.filter;
+  if (typeof filter === 'string') {
+    if (filter === node.nodeName.toLowerCase()) return true
+  } else if (Array.isArray(filter)) {
+    if (filter.indexOf(node.nodeName.toLowerCase()) > -1) return true
+  } else if (typeof filter === 'function') {
+    if (filter.call(rule, node, options)) return true
+  } else {
+    throw new TypeError('`filter` needs to be a string, array, or function')
+  }
+}
+
+/**
+ * The collapseWhitespace function is adapted from collapse-whitespace
+ * by Luc Thevenard.
+ *
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2014 Luc Thevenard <lucthevenard@gmail.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+/**
+ * collapseWhitespace(options) removes extraneous whitespace from an the given element.
+ *
+ * @param {Object} options
+ */
+function collapseWhitespace (options) {
+  var element = options.element;
+  var isBlock = options.isBlock;
+  var isVoid = options.isVoid;
+  var isPre = options.isPre || function (node) {
+    return node.nodeName === 'PRE'
+  };
+
+  if (!element.firstChild || isPre(element)) return
+
+  var prevText = null;
+  var keepLeadingWs = false;
+
+  var prev = null;
+  var node = next(prev, element, isPre);
+
+  while (node !== element) {
+    if (node.nodeType === 3 || node.nodeType === 4) { // Node.TEXT_NODE or Node.CDATA_SECTION_NODE
+      var text = node.data.replace(/[ \r\n\t]+/g, ' ');
+
+      if ((!prevText || / $/.test(prevText.data)) &&
+          !keepLeadingWs && text[0] === ' ') {
+        text = text.substr(1);
+      }
+
+      // `text` might be empty at this point.
+      if (!text) {
+        node = remove(node);
+        continue
+      }
+
+      node.data = text;
+
+      prevText = node;
+    } else if (node.nodeType === 1) { // Node.ELEMENT_NODE
+      if (isBlock(node) || node.nodeName === 'BR') {
+        if (prevText) {
+          prevText.data = prevText.data.replace(/ $/, '');
+        }
+
+        prevText = null;
+        keepLeadingWs = false;
+      } else if (isVoid(node) || isPre(node)) {
+        // Avoid trimming space around non-block, non-BR void elements and inline PRE.
+        prevText = null;
+        keepLeadingWs = true;
+      } else if (prevText) {
+        // Drop protection if set previously.
+        keepLeadingWs = false;
+      }
+    } else {
+      node = remove(node);
+      continue
+    }
+
+    var nextNode = next(prev, node, isPre);
+    prev = node;
+    node = nextNode;
+  }
+
+  if (prevText) {
+    prevText.data = prevText.data.replace(/ $/, '');
+    if (!prevText.data) {
+      remove(prevText);
+    }
+  }
+}
+
+/**
+ * remove(node) removes the given node from the DOM and returns the
+ * next node in the sequence.
+ *
+ * @param {Node} node
+ * @return {Node} node
+ */
+function remove (node) {
+  var next = node.nextSibling || node.parentNode;
+
+  node.parentNode.removeChild(node);
+
+  return next
+}
+
+/**
+ * next(prev, current, isPre) returns the next node in the sequence, given the
+ * current and previous nodes.
+ *
+ * @param {Node} prev
+ * @param {Node} current
+ * @param {Function} isPre
+ * @return {Node}
+ */
+function next (prev, current, isPre) {
+  if ((prev && prev.parentNode === current) || isPre(current)) {
+    return current.nextSibling || current.parentNode
+  }
+
+  return current.firstChild || current.nextSibling || current.parentNode
+}
+
+/*
+ * Set up window for Node.js
+ */
+
+var root = (typeof window !== 'undefined' ? window : {});
+
+/*
+ * Parsing HTML strings
+ */
+
+function canParseHTMLNatively () {
+  var Parser = root.DOMParser;
+  var canParse = false;
+
+  // Adapted from https://gist.github.com/1129031
+  // Firefox/Opera/IE throw errors on unsupported types
+  try {
+    // WebKit returns null on unsupported types
+    if (new Parser().parseFromString('', 'text/html')) {
+      canParse = true;
+    }
+  } catch (e) {}
+
+  return canParse
+}
+
+function createHTMLParser () {
+  var Parser = function () {};
+
+  {
+    var domino = require('@mixmark-io/domino');
+    Parser.prototype.parseFromString = function (string) {
+      return domino.createDocument(string)
+    };
+  }
+  return Parser
+}
+
+var HTMLParser = canParseHTMLNatively() ? root.DOMParser : createHTMLParser();
+
+function RootNode (input, options) {
+  var root;
+  if (typeof input === 'string') {
+    var doc = htmlParser().parseFromString(
+      // DOM parsers arrange elements in the <head> and <body>.
+      // Wrapping in a custom element ensures elements are reliably arranged in
+      // a single element.
+      '<x-turndown id="turndown-root">' + input + '</x-turndown>',
+      'text/html'
+    );
+    root = doc.getElementById('turndown-root');
+  } else {
+    root = input.cloneNode(true);
+  }
+  collapseWhitespace({
+    element: root,
+    isBlock: isBlock,
+    isVoid: isVoid,
+    isPre: options.preformattedCode ? isPreOrCode : null
+  });
+
+  return root
+}
+
+var _htmlParser;
+function htmlParser () {
+  _htmlParser = _htmlParser || new HTMLParser();
+  return _htmlParser
+}
+
+function isPreOrCode (node) {
+  return node.nodeName === 'PRE' || node.nodeName === 'CODE'
+}
+
+function Node$1 (node, options) {
+  node.isBlock = isBlock(node);
+  node.isCode = node.nodeName === 'CODE' || node.parentNode.isCode;
+  node.isBlank = isBlank(node);
+  node.flankingWhitespace = flankingWhitespace(node, options);
+  return node
+}
+
+function isBlank (node) {
+  return (
+    !isVoid(node) &&
+    !isMeaningfulWhenBlank(node) &&
+    /^\s*$/i.test(node.textContent) &&
+    !hasVoid(node) &&
+    !hasMeaningfulWhenBlank(node)
+  )
+}
+
+function flankingWhitespace (node, options) {
+  if (node.isBlock || (options.preformattedCode && node.isCode)) {
+    return { leading: '', trailing: '' }
+  }
+
+  var edges = edgeWhitespace(node.textContent);
+
+  // abandon leading ASCII WS if left-flanked by ASCII WS
+  if (edges.leadingAscii && isFlankedByWhitespace('left', node, options)) {
+    edges.leading = edges.leadingNonAscii;
+  }
+
+  // abandon trailing ASCII WS if right-flanked by ASCII WS
+  if (edges.trailingAscii && isFlankedByWhitespace('right', node, options)) {
+    edges.trailing = edges.trailingNonAscii;
+  }
+
+  return { leading: edges.leading, trailing: edges.trailing }
+}
+
+function edgeWhitespace (string) {
+  var m = string.match(/^(([ \t\r\n]*)(\s*))(?:(?=\S)[\s\S]*\S)?((\s*?)([ \t\r\n]*))$/);
+  return {
+    leading: m[1], // whole string for whitespace-only strings
+    leadingAscii: m[2],
+    leadingNonAscii: m[3],
+    trailing: m[4], // empty for whitespace-only strings
+    trailingNonAscii: m[5],
+    trailingAscii: m[6]
+  }
+}
+
+function isFlankedByWhitespace (side, node, options) {
+  var sibling;
+  var regExp;
+  var isFlanked;
+
+  if (side === 'left') {
+    sibling = node.previousSibling;
+    regExp = / $/;
+  } else {
+    sibling = node.nextSibling;
+    regExp = /^ /;
+  }
+
+  if (sibling) {
+    if (sibling.nodeType === 3) {
+      isFlanked = regExp.test(sibling.nodeValue);
+    } else if (options.preformattedCode && sibling.nodeName === 'CODE') {
+      isFlanked = false;
+    } else if (sibling.nodeType === 1 && !isBlock(sibling)) {
+      isFlanked = regExp.test(sibling.textContent);
+    }
+  }
+  return isFlanked
+}
+
+var reduce = Array.prototype.reduce;
+var escapes = [
+  [/\\/g, '\\\\'],
+  [/\*/g, '\\*'],
+  [/^-/g, '\\-'],
+  [/^\+ /g, '\\+ '],
+  [/^(=+)/g, '\\$1'],
+  [/^(#{1,6}) /g, '\\$1 '],
+  [/`/g, '\\`'],
+  [/^~~~/g, '\\~~~'],
+  [/\[/g, '\\['],
+  [/\]/g, '\\]'],
+  [/^>/g, '\\>'],
+  [/_/g, '\\_'],
+  [/^(\d+)\. /g, '$1\\. ']
+];
+
+function TurndownService (options) {
+  if (!(this instanceof TurndownService)) return new TurndownService(options)
+
+  var defaults = {
+    rules: rules,
+    headingStyle: 'setext',
+    hr: '* * *',
+    bulletListMarker: '*',
+    codeBlockStyle: 'indented',
+    fence: '```',
+    emDelimiter: '_',
+    strongDelimiter: '**',
+    linkStyle: 'inlined',
+    linkReferenceStyle: 'full',
+    br: '  ',
+    preformattedCode: false,
+    blankReplacement: function (content, node) {
+      return node.isBlock ? '\n\n' : ''
+    },
+    keepReplacement: function (content, node) {
+      return node.isBlock ? '\n\n' + node.outerHTML + '\n\n' : node.outerHTML
+    },
+    defaultReplacement: function (content, node) {
+      return node.isBlock ? '\n\n' + content + '\n\n' : content
+    }
+  };
+  this.options = extend({}, defaults, options);
+  this.rules = new Rules(this.options);
+}
+
+TurndownService.prototype = {
+  /**
+   * The entry point for converting a string or DOM node to Markdown
+   * @public
+   * @param {String|HTMLElement} input The string or DOM node to convert
+   * @returns A Markdown representation of the input
+   * @type String
+   */
+
+  turndown: function (input) {
+    if (!canConvert(input)) {
+      throw new TypeError(
+        input + ' is not a string, or an element/document/fragment node.'
+      )
+    }
+
+    if (input === '') return ''
+
+    var output = process.call(this, new RootNode(input, this.options));
+    return postProcess.call(this, output)
+  },
+
+  /**
+   * Add one or more plugins
+   * @public
+   * @param {Function|Array} plugin The plugin or array of plugins to add
+   * @returns The Turndown instance for chaining
+   * @type Object
+   */
+
+  use: function (plugin) {
+    if (Array.isArray(plugin)) {
+      for (var i = 0; i < plugin.length; i++) this.use(plugin[i]);
+    } else if (typeof plugin === 'function') {
+      plugin(this);
+    } else {
+      throw new TypeError('plugin must be a Function or an Array of Functions')
+    }
+    return this
+  },
+
+  /**
+   * Adds a rule
+   * @public
+   * @param {String} key The unique key of the rule
+   * @param {Object} rule The rule
+   * @returns The Turndown instance for chaining
+   * @type Object
+   */
+
+  addRule: function (key, rule) {
+    this.rules.add(key, rule);
+    return this
+  },
+
+  /**
+   * Keep a node (as HTML) that matches the filter
+   * @public
+   * @param {String|Array|Function} filter The unique key of the rule
+   * @returns The Turndown instance for chaining
+   * @type Object
+   */
+
+  keep: function (filter) {
+    this.rules.keep(filter);
+    return this
+  },
+
+  /**
+   * Remove a node that matches the filter
+   * @public
+   * @param {String|Array|Function} filter The unique key of the rule
+   * @returns The Turndown instance for chaining
+   * @type Object
+   */
+
+  remove: function (filter) {
+    this.rules.remove(filter);
+    return this
+  },
+
+  /**
+   * Escapes Markdown syntax
+   * @public
+   * @param {String} string The string to escape
+   * @returns A string with Markdown syntax escaped
+   * @type String
+   */
+
+  escape: function (string) {
+    return escapes.reduce(function (accumulator, escape) {
+      return accumulator.replace(escape[0], escape[1])
+    }, string)
+  }
+};
+
+/**
+ * Reduces a DOM node down to its Markdown string equivalent
+ * @private
+ * @param {HTMLElement} parentNode The node to convert
+ * @returns A Markdown representation of the node
+ * @type String
+ */
+
+function process (parentNode) {
+  var self = this;
+  return reduce.call(parentNode.childNodes, function (output, node) {
+    node = new Node$1(node, self.options);
+
+    var replacement = '';
+    if (node.nodeType === 3) {
+      replacement = node.isCode ? node.nodeValue : self.escape(node.nodeValue);
+    } else if (node.nodeType === 1) {
+      replacement = replacementForNode.call(self, node);
+    }
+
+    return join(output, replacement)
+  }, '')
+}
+
+/**
+ * Appends strings as each rule requires and trims the output
+ * @private
+ * @param {String} output The conversion output
+ * @returns A trimmed version of the ouput
+ * @type String
+ */
+
+function postProcess (output) {
+  var self = this;
+  this.rules.forEach(function (rule) {
+    if (typeof rule.append === 'function') {
+      output = join(output, rule.append(self.options));
+    }
+  });
+
+  return output.replace(/^[\t\r\n]+/, '').replace(/[\t\r\n\s]+$/, '')
+}
+
+/**
+ * Converts an element node to its Markdown equivalent
+ * @private
+ * @param {HTMLElement} node The node to convert
+ * @returns A Markdown representation of the node
+ * @type String
+ */
+
+function replacementForNode (node) {
+  var rule = this.rules.forNode(node);
+  var content = process.call(this, node);
+  var whitespace = node.flankingWhitespace;
+  if (whitespace.leading || whitespace.trailing) content = content.trim();
+  return (
+    whitespace.leading +
+    rule.replacement(content, node, this.options) +
+    whitespace.trailing
+  )
+}
+
+/**
+ * Joins replacement to the current output with appropriate number of new lines
+ * @private
+ * @param {String} output The current conversion output
+ * @param {String} replacement The string to append to the output
+ * @returns Joined output
+ * @type String
+ */
+
+function join (output, replacement) {
+  var s1 = trimTrailingNewlines(output);
+  var s2 = trimLeadingNewlines(replacement);
+  var nls = Math.max(output.length - s1.length, replacement.length - s2.length);
+  var separator = '\n\n'.substring(0, nls);
+
+  return s1 + separator + s2
+}
+
+/**
+ * Determines whether an input can be converted
+ * @private
+ * @param {String|HTMLElement} input Describe this parameter
+ * @returns Describe what it returns
+ * @type String|Object|Array|Boolean|Number
+ */
+
+function canConvert (input) {
+  return (
+    input != null && (
+      typeof input === 'string' ||
+      (input.nodeType && (
+        input.nodeType === 1 || input.nodeType === 9 || input.nodeType === 11
+      ))
+    )
+  )
+}
+
 function getDefaultExportFromCjs (x) {
 	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
 }
@@ -5706,951 +6650,26 @@ function requireMoment () {
 var momentExports = requireMoment();
 var moment = /*@__PURE__*/getDefaultExportFromCjs(momentExports);
 
-function extend (destination) {
-  for (var i = 1; i < arguments.length; i++) {
-    var source = arguments[i];
-    for (var key in source) {
-      if (source.hasOwnProperty(key)) destination[key] = source[key];
-    }
-  }
-  return destination
-}
-
-function repeat (character, count) {
-  return Array(count + 1).join(character)
-}
-
-function trimLeadingNewlines (string) {
-  return string.replace(/^\n*/, '')
-}
-
-function trimTrailingNewlines (string) {
-  // avoid match-at-end regexp bottleneck, see #370
-  var indexEnd = string.length;
-  while (indexEnd > 0 && string[indexEnd - 1] === '\n') indexEnd--;
-  return string.substring(0, indexEnd)
-}
-
-var blockElements = [
-  'ADDRESS', 'ARTICLE', 'ASIDE', 'AUDIO', 'BLOCKQUOTE', 'BODY', 'CANVAS',
-  'CENTER', 'DD', 'DIR', 'DIV', 'DL', 'DT', 'FIELDSET', 'FIGCAPTION', 'FIGURE',
-  'FOOTER', 'FORM', 'FRAMESET', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HEADER',
-  'HGROUP', 'HR', 'HTML', 'ISINDEX', 'LI', 'MAIN', 'MENU', 'NAV', 'NOFRAMES',
-  'NOSCRIPT', 'OL', 'OUTPUT', 'P', 'PRE', 'SECTION', 'TABLE', 'TBODY', 'TD',
-  'TFOOT', 'TH', 'THEAD', 'TR', 'UL'
-];
-
-function isBlock (node) {
-  return is(node, blockElements)
-}
-
-var voidElements = [
-  'AREA', 'BASE', 'BR', 'COL', 'COMMAND', 'EMBED', 'HR', 'IMG', 'INPUT',
-  'KEYGEN', 'LINK', 'META', 'PARAM', 'SOURCE', 'TRACK', 'WBR'
-];
-
-function isVoid (node) {
-  return is(node, voidElements)
-}
-
-function hasVoid (node) {
-  return has(node, voidElements)
-}
-
-var meaningfulWhenBlankElements = [
-  'A', 'TABLE', 'THEAD', 'TBODY', 'TFOOT', 'TH', 'TD', 'IFRAME', 'SCRIPT',
-  'AUDIO', 'VIDEO'
-];
-
-function isMeaningfulWhenBlank (node) {
-  return is(node, meaningfulWhenBlankElements)
-}
-
-function hasMeaningfulWhenBlank (node) {
-  return has(node, meaningfulWhenBlankElements)
-}
-
-function is (node, tagNames) {
-  return tagNames.indexOf(node.nodeName) >= 0
-}
-
-function has (node, tagNames) {
-  return (
-    node.getElementsByTagName &&
-    tagNames.some(function (tagName) {
-      return node.getElementsByTagName(tagName).length
-    })
-  )
-}
-
-var rules = {};
-
-rules.paragraph = {
-  filter: 'p',
-
-  replacement: function (content) {
-    return '\n\n' + content + '\n\n'
-  }
-};
-
-rules.lineBreak = {
-  filter: 'br',
-
-  replacement: function (content, node, options) {
-    return options.br + '\n'
-  }
-};
-
-rules.heading = {
-  filter: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
-
-  replacement: function (content, node, options) {
-    var hLevel = Number(node.nodeName.charAt(1));
-
-    if (options.headingStyle === 'setext' && hLevel < 3) {
-      var underline = repeat((hLevel === 1 ? '=' : '-'), content.length);
-      return (
-        '\n\n' + content + '\n' + underline + '\n\n'
-      )
-    } else {
-      return '\n\n' + repeat('#', hLevel) + ' ' + content + '\n\n'
-    }
-  }
-};
-
-rules.blockquote = {
-  filter: 'blockquote',
-
-  replacement: function (content) {
-    content = content.replace(/^\n+|\n+$/g, '');
-    content = content.replace(/^/gm, '> ');
-    return '\n\n' + content + '\n\n'
-  }
-};
-
-rules.list = {
-  filter: ['ul', 'ol'],
-
-  replacement: function (content, node) {
-    var parent = node.parentNode;
-    if (parent.nodeName === 'LI' && parent.lastElementChild === node) {
-      return '\n' + content
-    } else {
-      return '\n\n' + content + '\n\n'
-    }
-  }
-};
-
-rules.listItem = {
-  filter: 'li',
-
-  replacement: function (content, node, options) {
-    content = content
-      .replace(/^\n+/, '') // remove leading newlines
-      .replace(/\n+$/, '\n') // replace trailing newlines with just a single one
-      .replace(/\n/gm, '\n    '); // indent
-    var prefix = options.bulletListMarker + '   ';
-    var parent = node.parentNode;
-    if (parent.nodeName === 'OL') {
-      var start = parent.getAttribute('start');
-      var index = Array.prototype.indexOf.call(parent.children, node);
-      prefix = (start ? Number(start) + index : index + 1) + '.  ';
-    }
-    return (
-      prefix + content + (node.nextSibling && !/\n$/.test(content) ? '\n' : '')
-    )
-  }
-};
-
-rules.indentedCodeBlock = {
-  filter: function (node, options) {
-    return (
-      options.codeBlockStyle === 'indented' &&
-      node.nodeName === 'PRE' &&
-      node.firstChild &&
-      node.firstChild.nodeName === 'CODE'
-    )
-  },
-
-  replacement: function (content, node, options) {
-    return (
-      '\n\n    ' +
-      node.firstChild.textContent.replace(/\n/g, '\n    ') +
-      '\n\n'
-    )
-  }
-};
-
-rules.fencedCodeBlock = {
-  filter: function (node, options) {
-    return (
-      options.codeBlockStyle === 'fenced' &&
-      node.nodeName === 'PRE' &&
-      node.firstChild &&
-      node.firstChild.nodeName === 'CODE'
-    )
-  },
-
-  replacement: function (content, node, options) {
-    var className = node.firstChild.getAttribute('class') || '';
-    var language = (className.match(/language-(\S+)/) || [null, ''])[1];
-    var code = node.firstChild.textContent;
-
-    var fenceChar = options.fence.charAt(0);
-    var fenceSize = 3;
-    var fenceInCodeRegex = new RegExp('^' + fenceChar + '{3,}', 'gm');
-
-    var match;
-    while ((match = fenceInCodeRegex.exec(code))) {
-      if (match[0].length >= fenceSize) {
-        fenceSize = match[0].length + 1;
-      }
-    }
-
-    var fence = repeat(fenceChar, fenceSize);
-
-    return (
-      '\n\n' + fence + language + '\n' +
-      code.replace(/\n$/, '') +
-      '\n' + fence + '\n\n'
-    )
-  }
-};
-
-rules.horizontalRule = {
-  filter: 'hr',
-
-  replacement: function (content, node, options) {
-    return '\n\n' + options.hr + '\n\n'
-  }
-};
-
-rules.inlineLink = {
-  filter: function (node, options) {
-    return (
-      options.linkStyle === 'inlined' &&
-      node.nodeName === 'A' &&
-      node.getAttribute('href')
-    )
-  },
-
-  replacement: function (content, node) {
-    var href = node.getAttribute('href');
-    if (href) href = href.replace(/([()])/g, '\\$1');
-    var title = cleanAttribute(node.getAttribute('title'));
-    if (title) title = ' "' + title.replace(/"/g, '\\"') + '"';
-    return '[' + content + '](' + href + title + ')'
-  }
-};
-
-rules.referenceLink = {
-  filter: function (node, options) {
-    return (
-      options.linkStyle === 'referenced' &&
-      node.nodeName === 'A' &&
-      node.getAttribute('href')
-    )
-  },
-
-  replacement: function (content, node, options) {
-    var href = node.getAttribute('href');
-    var title = cleanAttribute(node.getAttribute('title'));
-    if (title) title = ' "' + title + '"';
-    var replacement;
-    var reference;
-
-    switch (options.linkReferenceStyle) {
-      case 'collapsed':
-        replacement = '[' + content + '][]';
-        reference = '[' + content + ']: ' + href + title;
-        break
-      case 'shortcut':
-        replacement = '[' + content + ']';
-        reference = '[' + content + ']: ' + href + title;
-        break
-      default:
-        var id = this.references.length + 1;
-        replacement = '[' + content + '][' + id + ']';
-        reference = '[' + id + ']: ' + href + title;
-    }
-
-    this.references.push(reference);
-    return replacement
-  },
-
-  references: [],
-
-  append: function (options) {
-    var references = '';
-    if (this.references.length) {
-      references = '\n\n' + this.references.join('\n') + '\n\n';
-      this.references = []; // Reset references
-    }
-    return references
-  }
-};
-
-rules.emphasis = {
-  filter: ['em', 'i'],
-
-  replacement: function (content, node, options) {
-    if (!content.trim()) return ''
-    return options.emDelimiter + content + options.emDelimiter
-  }
-};
-
-rules.strong = {
-  filter: ['strong', 'b'],
-
-  replacement: function (content, node, options) {
-    if (!content.trim()) return ''
-    return options.strongDelimiter + content + options.strongDelimiter
-  }
-};
-
-rules.code = {
-  filter: function (node) {
-    var hasSiblings = node.previousSibling || node.nextSibling;
-    var isCodeBlock = node.parentNode.nodeName === 'PRE' && !hasSiblings;
-
-    return node.nodeName === 'CODE' && !isCodeBlock
-  },
-
-  replacement: function (content) {
-    if (!content) return ''
-    content = content.replace(/\r?\n|\r/g, ' ');
-
-    var extraSpace = /^`|^ .*?[^ ].* $|`$/.test(content) ? ' ' : '';
-    var delimiter = '`';
-    var matches = content.match(/`+/gm) || [];
-    while (matches.indexOf(delimiter) !== -1) delimiter = delimiter + '`';
-
-    return delimiter + extraSpace + content + extraSpace + delimiter
-  }
-};
-
-rules.image = {
-  filter: 'img',
-
-  replacement: function (content, node) {
-    var alt = cleanAttribute(node.getAttribute('alt'));
-    var src = node.getAttribute('src') || '';
-    var title = cleanAttribute(node.getAttribute('title'));
-    var titlePart = title ? ' "' + title + '"' : '';
-    return src ? '![' + alt + ']' + '(' + src + titlePart + ')' : ''
-  }
-};
-
-function cleanAttribute (attribute) {
-  return attribute ? attribute.replace(/(\n+\s*)+/g, '\n') : ''
-}
-
-/**
- * Manages a collection of rules used to convert HTML to Markdown
- */
-
-function Rules (options) {
-  this.options = options;
-  this._keep = [];
-  this._remove = [];
-
-  this.blankRule = {
-    replacement: options.blankReplacement
-  };
-
-  this.keepReplacement = options.keepReplacement;
-
-  this.defaultRule = {
-    replacement: options.defaultReplacement
-  };
-
-  this.array = [];
-  for (var key in options.rules) this.array.push(options.rules[key]);
-}
-
-Rules.prototype = {
-  add: function (key, rule) {
-    this.array.unshift(rule);
-  },
-
-  keep: function (filter) {
-    this._keep.unshift({
-      filter: filter,
-      replacement: this.keepReplacement
-    });
-  },
-
-  remove: function (filter) {
-    this._remove.unshift({
-      filter: filter,
-      replacement: function () {
-        return ''
-      }
-    });
-  },
-
-  forNode: function (node) {
-    if (node.isBlank) return this.blankRule
-    var rule;
-
-    if ((rule = findRule(this.array, node, this.options))) return rule
-    if ((rule = findRule(this._keep, node, this.options))) return rule
-    if ((rule = findRule(this._remove, node, this.options))) return rule
-
-    return this.defaultRule
-  },
-
-  forEach: function (fn) {
-    for (var i = 0; i < this.array.length; i++) fn(this.array[i], i);
-  }
-};
-
-function findRule (rules, node, options) {
-  for (var i = 0; i < rules.length; i++) {
-    var rule = rules[i];
-    if (filterValue(rule, node, options)) return rule
-  }
-  return void 0
-}
-
-function filterValue (rule, node, options) {
-  var filter = rule.filter;
-  if (typeof filter === 'string') {
-    if (filter === node.nodeName.toLowerCase()) return true
-  } else if (Array.isArray(filter)) {
-    if (filter.indexOf(node.nodeName.toLowerCase()) > -1) return true
-  } else if (typeof filter === 'function') {
-    if (filter.call(rule, node, options)) return true
-  } else {
-    throw new TypeError('`filter` needs to be a string, array, or function')
-  }
-}
-
-/**
- * The collapseWhitespace function is adapted from collapse-whitespace
- * by Luc Thevenard.
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2014 Luc Thevenard <lucthevenard@gmail.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-/**
- * collapseWhitespace(options) removes extraneous whitespace from an the given element.
- *
- * @param {Object} options
- */
-function collapseWhitespace (options) {
-  var element = options.element;
-  var isBlock = options.isBlock;
-  var isVoid = options.isVoid;
-  var isPre = options.isPre || function (node) {
-    return node.nodeName === 'PRE'
-  };
-
-  if (!element.firstChild || isPre(element)) return
-
-  var prevText = null;
-  var keepLeadingWs = false;
-
-  var prev = null;
-  var node = next(prev, element, isPre);
-
-  while (node !== element) {
-    if (node.nodeType === 3 || node.nodeType === 4) { // Node.TEXT_NODE or Node.CDATA_SECTION_NODE
-      var text = node.data.replace(/[ \r\n\t]+/g, ' ');
-
-      if ((!prevText || / $/.test(prevText.data)) &&
-          !keepLeadingWs && text[0] === ' ') {
-        text = text.substr(1);
-      }
-
-      // `text` might be empty at this point.
-      if (!text) {
-        node = remove(node);
-        continue
-      }
-
-      node.data = text;
-
-      prevText = node;
-    } else if (node.nodeType === 1) { // Node.ELEMENT_NODE
-      if (isBlock(node) || node.nodeName === 'BR') {
-        if (prevText) {
-          prevText.data = prevText.data.replace(/ $/, '');
-        }
-
-        prevText = null;
-        keepLeadingWs = false;
-      } else if (isVoid(node) || isPre(node)) {
-        // Avoid trimming space around non-block, non-BR void elements and inline PRE.
-        prevText = null;
-        keepLeadingWs = true;
-      } else if (prevText) {
-        // Drop protection if set previously.
-        keepLeadingWs = false;
-      }
-    } else {
-      node = remove(node);
-      continue
-    }
-
-    var nextNode = next(prev, node, isPre);
-    prev = node;
-    node = nextNode;
-  }
-
-  if (prevText) {
-    prevText.data = prevText.data.replace(/ $/, '');
-    if (!prevText.data) {
-      remove(prevText);
-    }
-  }
-}
-
-/**
- * remove(node) removes the given node from the DOM and returns the
- * next node in the sequence.
- *
- * @param {Node} node
- * @return {Node} node
- */
-function remove (node) {
-  var next = node.nextSibling || node.parentNode;
-
-  node.parentNode.removeChild(node);
-
-  return next
-}
-
-/**
- * next(prev, current, isPre) returns the next node in the sequence, given the
- * current and previous nodes.
- *
- * @param {Node} prev
- * @param {Node} current
- * @param {Function} isPre
- * @return {Node}
- */
-function next (prev, current, isPre) {
-  if ((prev && prev.parentNode === current) || isPre(current)) {
-    return current.nextSibling || current.parentNode
-  }
-
-  return current.firstChild || current.nextSibling || current.parentNode
-}
-
-/*
- * Set up window for Node.js
- */
-
-var root = (typeof window !== 'undefined' ? window : {});
-
-/*
- * Parsing HTML strings
- */
-
-function canParseHTMLNatively () {
-  var Parser = root.DOMParser;
-  var canParse = false;
-
-  // Adapted from https://gist.github.com/1129031
-  // Firefox/Opera/IE throw errors on unsupported types
-  try {
-    // WebKit returns null on unsupported types
-    if (new Parser().parseFromString('', 'text/html')) {
-      canParse = true;
-    }
-  } catch (e) {}
-
-  return canParse
-}
-
-function createHTMLParser () {
-  var Parser = function () {};
-
-  {
-    var domino = require('@mixmark-io/domino');
-    Parser.prototype.parseFromString = function (string) {
-      return domino.createDocument(string)
-    };
-  }
-  return Parser
-}
-
-var HTMLParser = canParseHTMLNatively() ? root.DOMParser : createHTMLParser();
-
-function RootNode (input, options) {
-  var root;
-  if (typeof input === 'string') {
-    var doc = htmlParser().parseFromString(
-      // DOM parsers arrange elements in the <head> and <body>.
-      // Wrapping in a custom element ensures elements are reliably arranged in
-      // a single element.
-      '<x-turndown id="turndown-root">' + input + '</x-turndown>',
-      'text/html'
-    );
-    root = doc.getElementById('turndown-root');
-  } else {
-    root = input.cloneNode(true);
-  }
-  collapseWhitespace({
-    element: root,
-    isBlock: isBlock,
-    isVoid: isVoid,
-    isPre: options.preformattedCode ? isPreOrCode : null
-  });
-
-  return root
-}
-
-var _htmlParser;
-function htmlParser () {
-  _htmlParser = _htmlParser || new HTMLParser();
-  return _htmlParser
-}
-
-function isPreOrCode (node) {
-  return node.nodeName === 'PRE' || node.nodeName === 'CODE'
-}
-
-function Node$1 (node, options) {
-  node.isBlock = isBlock(node);
-  node.isCode = node.nodeName === 'CODE' || node.parentNode.isCode;
-  node.isBlank = isBlank(node);
-  node.flankingWhitespace = flankingWhitespace(node, options);
-  return node
-}
-
-function isBlank (node) {
-  return (
-    !isVoid(node) &&
-    !isMeaningfulWhenBlank(node) &&
-    /^\s*$/i.test(node.textContent) &&
-    !hasVoid(node) &&
-    !hasMeaningfulWhenBlank(node)
-  )
-}
-
-function flankingWhitespace (node, options) {
-  if (node.isBlock || (options.preformattedCode && node.isCode)) {
-    return { leading: '', trailing: '' }
-  }
-
-  var edges = edgeWhitespace(node.textContent);
-
-  // abandon leading ASCII WS if left-flanked by ASCII WS
-  if (edges.leadingAscii && isFlankedByWhitespace('left', node, options)) {
-    edges.leading = edges.leadingNonAscii;
-  }
-
-  // abandon trailing ASCII WS if right-flanked by ASCII WS
-  if (edges.trailingAscii && isFlankedByWhitespace('right', node, options)) {
-    edges.trailing = edges.trailingNonAscii;
-  }
-
-  return { leading: edges.leading, trailing: edges.trailing }
-}
-
-function edgeWhitespace (string) {
-  var m = string.match(/^(([ \t\r\n]*)(\s*))(?:(?=\S)[\s\S]*\S)?((\s*?)([ \t\r\n]*))$/);
-  return {
-    leading: m[1], // whole string for whitespace-only strings
-    leadingAscii: m[2],
-    leadingNonAscii: m[3],
-    trailing: m[4], // empty for whitespace-only strings
-    trailingNonAscii: m[5],
-    trailingAscii: m[6]
-  }
-}
-
-function isFlankedByWhitespace (side, node, options) {
-  var sibling;
-  var regExp;
-  var isFlanked;
-
-  if (side === 'left') {
-    sibling = node.previousSibling;
-    regExp = / $/;
-  } else {
-    sibling = node.nextSibling;
-    regExp = /^ /;
-  }
-
-  if (sibling) {
-    if (sibling.nodeType === 3) {
-      isFlanked = regExp.test(sibling.nodeValue);
-    } else if (options.preformattedCode && sibling.nodeName === 'CODE') {
-      isFlanked = false;
-    } else if (sibling.nodeType === 1 && !isBlock(sibling)) {
-      isFlanked = regExp.test(sibling.textContent);
-    }
-  }
-  return isFlanked
-}
-
-var reduce = Array.prototype.reduce;
-var escapes = [
-  [/\\/g, '\\\\'],
-  [/\*/g, '\\*'],
-  [/^-/g, '\\-'],
-  [/^\+ /g, '\\+ '],
-  [/^(=+)/g, '\\$1'],
-  [/^(#{1,6}) /g, '\\$1 '],
-  [/`/g, '\\`'],
-  [/^~~~/g, '\\~~~'],
-  [/\[/g, '\\['],
-  [/\]/g, '\\]'],
-  [/^>/g, '\\>'],
-  [/_/g, '\\_'],
-  [/^(\d+)\. /g, '$1\\. ']
-];
-
-function TurndownService (options) {
-  if (!(this instanceof TurndownService)) return new TurndownService(options)
-
-  var defaults = {
-    rules: rules,
-    headingStyle: 'setext',
-    hr: '* * *',
-    bulletListMarker: '*',
-    codeBlockStyle: 'indented',
-    fence: '```',
-    emDelimiter: '_',
-    strongDelimiter: '**',
-    linkStyle: 'inlined',
-    linkReferenceStyle: 'full',
-    br: '  ',
-    preformattedCode: false,
-    blankReplacement: function (content, node) {
-      return node.isBlock ? '\n\n' : ''
-    },
-    keepReplacement: function (content, node) {
-      return node.isBlock ? '\n\n' + node.outerHTML + '\n\n' : node.outerHTML
-    },
-    defaultReplacement: function (content, node) {
-      return node.isBlock ? '\n\n' + content + '\n\n' : content
-    }
-  };
-  this.options = extend({}, defaults, options);
-  this.rules = new Rules(this.options);
-}
-
-TurndownService.prototype = {
-  /**
-   * The entry point for converting a string or DOM node to Markdown
-   * @public
-   * @param {String|HTMLElement} input The string or DOM node to convert
-   * @returns A Markdown representation of the input
-   * @type String
-   */
-
-  turndown: function (input) {
-    if (!canConvert(input)) {
-      throw new TypeError(
-        input + ' is not a string, or an element/document/fragment node.'
-      )
-    }
-
-    if (input === '') return ''
-
-    var output = process.call(this, new RootNode(input, this.options));
-    return postProcess.call(this, output)
-  },
-
-  /**
-   * Add one or more plugins
-   * @public
-   * @param {Function|Array} plugin The plugin or array of plugins to add
-   * @returns The Turndown instance for chaining
-   * @type Object
-   */
-
-  use: function (plugin) {
-    if (Array.isArray(plugin)) {
-      for (var i = 0; i < plugin.length; i++) this.use(plugin[i]);
-    } else if (typeof plugin === 'function') {
-      plugin(this);
-    } else {
-      throw new TypeError('plugin must be a Function or an Array of Functions')
-    }
-    return this
-  },
-
-  /**
-   * Adds a rule
-   * @public
-   * @param {String} key The unique key of the rule
-   * @param {Object} rule The rule
-   * @returns The Turndown instance for chaining
-   * @type Object
-   */
-
-  addRule: function (key, rule) {
-    this.rules.add(key, rule);
-    return this
-  },
-
-  /**
-   * Keep a node (as HTML) that matches the filter
-   * @public
-   * @param {String|Array|Function} filter The unique key of the rule
-   * @returns The Turndown instance for chaining
-   * @type Object
-   */
-
-  keep: function (filter) {
-    this.rules.keep(filter);
-    return this
-  },
-
-  /**
-   * Remove a node that matches the filter
-   * @public
-   * @param {String|Array|Function} filter The unique key of the rule
-   * @returns The Turndown instance for chaining
-   * @type Object
-   */
-
-  remove: function (filter) {
-    this.rules.remove(filter);
-    return this
-  },
-
-  /**
-   * Escapes Markdown syntax
-   * @public
-   * @param {String} string The string to escape
-   * @returns A string with Markdown syntax escaped
-   * @type String
-   */
-
-  escape: function (string) {
-    return escapes.reduce(function (accumulator, escape) {
-      return accumulator.replace(escape[0], escape[1])
-    }, string)
-  }
-};
-
-/**
- * Reduces a DOM node down to its Markdown string equivalent
- * @private
- * @param {HTMLElement} parentNode The node to convert
- * @returns A Markdown representation of the node
- * @type String
- */
-
-function process (parentNode) {
-  var self = this;
-  return reduce.call(parentNode.childNodes, function (output, node) {
-    node = new Node$1(node, self.options);
-
-    var replacement = '';
-    if (node.nodeType === 3) {
-      replacement = node.isCode ? node.nodeValue : self.escape(node.nodeValue);
-    } else if (node.nodeType === 1) {
-      replacement = replacementForNode.call(self, node);
-    }
-
-    return join(output, replacement)
-  }, '')
-}
-
-/**
- * Appends strings as each rule requires and trims the output
- * @private
- * @param {String} output The conversion output
- * @returns A trimmed version of the ouput
- * @type String
- */
-
-function postProcess (output) {
-  var self = this;
-  this.rules.forEach(function (rule) {
-    if (typeof rule.append === 'function') {
-      output = join(output, rule.append(self.options));
-    }
-  });
-
-  return output.replace(/^[\t\r\n]+/, '').replace(/[\t\r\n\s]+$/, '')
-}
-
-/**
- * Converts an element node to its Markdown equivalent
- * @private
- * @param {HTMLElement} node The node to convert
- * @returns A Markdown representation of the node
- * @type String
- */
-
-function replacementForNode (node) {
-  var rule = this.rules.forNode(node);
-  var content = process.call(this, node);
-  var whitespace = node.flankingWhitespace;
-  if (whitespace.leading || whitespace.trailing) content = content.trim();
-  return (
-    whitespace.leading +
-    rule.replacement(content, node, this.options) +
-    whitespace.trailing
-  )
-}
-
-/**
- * Joins replacement to the current output with appropriate number of new lines
- * @private
- * @param {String} output The current conversion output
- * @param {String} replacement The string to append to the output
- * @returns Joined output
- * @type String
- */
-
-function join (output, replacement) {
-  var s1 = trimTrailingNewlines(output);
-  var s2 = trimLeadingNewlines(replacement);
-  var nls = Math.max(output.length - s1.length, replacement.length - s2.length);
-  var separator = '\n\n'.substring(0, nls);
-
-  return s1 + separator + s2
-}
-
-/**
- * Determines whether an input can be converted
- * @private
- * @param {String|HTMLElement} input Describe this parameter
- * @returns Describe what it returns
- * @type String|Object|Array|Boolean|Number
- */
-
-function canConvert (input) {
-  return (
-    input != null && (
-      typeof input === 'string' ||
-      (input.nodeType && (
-        input.nodeType === 1 || input.nodeType === 9 || input.nodeType === 11
-      ))
-    )
-  )
-}
-
 const turndownService = new TurndownService({ headingStyle: "atx" });
+/**
+ * 渲染模板字符串，支持 {{word}} 变量 和 moment 格式化，如 {{YYYY-MM-DD}}。
+ * @param template 模板字符串
+ * @param context 传入上下文变量，如 { word: 'example' }
+ * @returns 替换后的字符串
+ */
+function renderTemplate(template, context) {
+    return template.replace(/\{\{(.*?)\}\}/g, (_, token) => {
+        token = token.trim();
+        if (context[token] !== undefined)
+            return context[token];
+        try {
+            return moment().format(token); // 尝试当作日期格式化
+        }
+        catch {
+            return `{{${token}}}`; // 保留原样，避免报错
+        }
+    });
+}
 // 插入对应 Markdown 内容到当前活动编辑器的光标处；
 async function insertAtCursor(app, text) {
     // 获取当前活动文件
@@ -6664,28 +6683,48 @@ async function insertAtCursor(app, text) {
     // 获取 Markdown 编辑器视图
     const view = app.workspace.getActiveViewOfType(obsidian.MarkdownView);
     if (!view || !view.editor) {
-        new obsidian.Notice("无法插入：未检测到 Markdown 编辑器");
+        new obsidian.Notice("无法插入：未检测到活动 Markdown 编辑器");
         return false;
     }
     // 插入文本
     view.editor.replaceSelection(text);
-    new obsidian.Notice("已插入内容到当前文件");
+    new obsidian.Notice("已插入内容到当前文件中");
     return true;
 }
+/**
+ * 将 content 追加到指定 Markdown 文件末尾。
+ * 若文件不存在则自动创建。
+ */
 async function appendToFile(app, filePath, content) {
     const path = obsidian.normalizePath(filePath);
-    // console.log("path:", path);
-    const existing = app.vault.getAbstractFileByPath(path);
-    // console.log("existing:", existing);
-    if (!existing) {
-        new obsidian.Notice(`文件 ${path} 不存在`);
+    const { vault } = app;
+    let targetFile = vault.getAbstractFileByPath(path);
+    // 若不存在，则递归创建文件夹并创建新文件
+    if (!targetFile) {
+        const dir = path.substring(0, path.lastIndexOf("/"));
+        if (dir && !vault.getAbstractFileByPath(dir)) {
+            await vault.createFolder(dir).catch(() => { }); // 忽略已存在报错
+        }
+        try {
+            targetFile = await vault.create(path, content);
+            new obsidian.Notice(`已创建文件：${path}`);
+            return; // 已写入内容，无需再追加
+        }
+        catch (err) {
+            new obsidian.Notice(`无法创建文件：${path}`);
+            console.error(err);
+            return;
+        }
     }
-    if (existing instanceof obsidian.TFile) {
-        const old = await app.vault.read(existing);
-        await app.vault.modify(existing, old + "\n" + content);
+    // 已存在：读取旧内容并追加
+    try {
+        const old = await vault.read(targetFile);
+        await vault.modify(targetFile, old + "\n" + content);
+        new obsidian.Notice(`已追加内容到：${path}`);
     }
-    else {
-        await app.vault.create(path, content);
+    catch (err) {
+        new obsidian.Notice(`写入文件失败：${path}`);
+        console.error(err);
     }
 }
 function htmlToMarkdownFiltered(html) {
@@ -6951,23 +6990,32 @@ function injectGoldenDictLinkAllAsBlock(doc) {
 }
 /**
  * 使用模板格式化 Markdown 输出。
+ * 支持转义字符：\n, \t, \\, \,
  * @param word 当前查询单词
  * @param markdown Markdown 内容（已处理好）
  * @param prefixTpl 前缀模板（支持 {{word}} 和任意 moment 格式）
  * @param suffixTpl 后缀模板（支持 {{word}} 和任意 moment 格式）
  */
 function formatMarkdownOutput(word, markdown, prefixTpl, suffixTpl) {
-    const render = (tpl) => tpl.replace(/\{\{(.*?)\}\}/g, (_, token) => {
-        token = token.trim();
-        if (token === "word")
-            return word;
-        try {
-            return moment().format(token); // 如 {{YYYY-MM-DD}}、{{HH:mm:ss}} 等
-        }
-        catch (e) {
-            return `{{${token}}}`; // 保留原样，防止崩溃
-        }
-    });
+    const render = (tpl) => {
+        const replaced = tpl.replace(/\{\{(.*?)\}\}/g, (_, token) => {
+            token = token.trim();
+            if (token === "word")
+                return word;
+            try {
+                return moment().format(token); // 例如 {{YYYY-MM-DD}}、{{HH:mm}} 等
+            }
+            catch (e) {
+                return `{{${token}}}`; // 保留原样，避免崩溃
+            }
+        });
+        // 处理转义字符：\n \t \\ \,
+        return replaced
+            .replace(/\\n/g, "\n")
+            .replace(/\\t/g, "\t")
+            .replace(/\\\\/g, "\\")
+            .replace(/\\,/g, ",");
+    };
     const prefix = render(prefixTpl);
     const suffix = render(suffixTpl);
     return [prefix, markdown, suffix].filter(Boolean).join("\n");
@@ -6976,83 +7024,102 @@ function applySimplifiedView(container, simplified, settings) {
     applyGlobalHide(container, settings.simplifiedGlobalHideSelectors);
     if (simplified) {
         // applySimplifiedHide(container, settings.simplifiedHideSelectors);
-        applySimplifiedHide(container, settings.simplifiedHideSelectors, settings.simplifiedShowInHiddenSelectors);
-        applySimplifiedShowInHidden(container, settings.simplifiedShowInHiddenSelectors);
+        // applySimplifiedHide(container, settings.simplifiedHideSelectors, settings.simplifiedShowInHiddenSelectors);
+        // applySimplifiedShowInHidden(container , settings.simplifiedShowInHiddenSelectors);
+        applySimplifiedFilter(container, settings.simplifiedHideSelectors, settings.simplifiedShowInHiddenSelectors);
     }
 }
 // 始终隐藏元素
 function applyGlobalHide(container, selectorsText) {
-    const selectors = selectorsText.split("\n").map(s => s.trim()).filter(Boolean);
+    const selectors = selectorsText.split("\n").map(s => s.trim()).filter((l) => l && !l.startsWith("//")).filter(Boolean);
     selectors.forEach(selector => {
         container.querySelectorAll(selector).forEach(el => {
             el.style.display = "none";
         });
     });
 }
-function parseSimplifiedShowRules(rulesStr) {
-    return rulesStr
-        .split("\n")
-        .map(line => line.trim())
-        .filter(line => line.includes(">"))
-        .map(line => {
-        const [parentSelector, childSelector] = line.split(">").map(s => s.trim());
-        return { parentSelector, childSelector };
-    });
-}
+// applySimplifiedHide;applySimplifiedShowInHidden;合二为一了
 /**
- * 简略模式隐藏元素，同时保留内部需要显示的子元素。
+ * 统一的「简略模式过滤」⼯具。
+ *
+ * 1. **全局隐藏**：`hideSelectorsText`  — 每⾏⼀个 CSS 选择器，直接隐藏；
+ * 2. **仅保留指定⼦元素**：`keepSelectorsText`
+ *    - 每⾏ `父选择器 , ⼦选择器`（逗号分隔，允许空格）
+ *    - 先隐藏父，再把指定的⼦（或孙）元素重新显示
+ *
+ * @example
+ * hideSelectorsText:
+ * ```txt
+ * .hidden_text
+ * .vis_w
+ * span.def_labels
+ * ```
+ *
+ * keepSelectorsText:
+ * ```txt
+ * .uro_def , .mw_zh          // 只保留 uro_def 里的中文释义
+ * .un_text  , .mw_zh         // 同上
+ * .snote    , span.note-tag  // 只保留 snote 里的 note‑tag
+ * ```
  */
-function applySimplifiedHide(container, hideSelectorsText, showInHiddenText) {
-    const hideSelectors = hideSelectorsText
+function applySimplifiedFilter(container, hideSelectorsText, keepSelectorsText) {
+    /* ---------- 1. 先统一隐藏 ---------- */
+    hideSelectorsText
         .split("\n")
-        .map(s => s.trim())
-        .filter(Boolean);
-    const showRules = showInHiddenText
-        ? parseSimplifiedShowRules(showInHiddenText)
-        : [];
-    for (const selector of hideSelectors) {
-        const elements = Array.from(container.querySelectorAll(selector));
-        for (const el of elements) {
-            // 检查该元素是否匹配任何显示规则
-            const matchingRules = showRules.filter(rule => el.matches(rule.parentSelector));
-            if (matchingRules.length > 0) {
-                // 有显示子规则，不隐藏自己，但隐藏其他子元素
-                Array.from(el.children).forEach(child => {
-                    const shouldKeep = matchingRules.some(rule => child.matches(rule.childSelector));
-                    if (!shouldKeep)
-                        child.style.display = "none";
-                });
-            }
-            else {
-                // 无需保留子元素，直接隐藏整个元素
-                el.style.display = "none";
-            }
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith("//"))
+        .forEach((sel) => {
+        container.querySelectorAll(sel).forEach((el) => {
+            el.style.display = "none";
+        });
+    });
+    /* ---------- 2. 解析「仅保留指定子元素」规则 ---------- */
+    const keepRules = keepSelectorsText
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l && !l.startsWith("//"))
+        .map((l) => {
+        const [parentSel, childSel] = l.split(",").map((s) => s.trim());
+        return { parentSel, childSel };
+    })
+        .filter((r) => r.parentSel && r.childSel);
+    /* ---------- 3. 逐条规则处理 ---------- */
+    for (const { parentSel, childSel } of keepRules) {
+        // 找到所有父元素（即使它们被隐藏）
+        const parents = Array.from(container.querySelectorAll(parentSel));
+        for (const parent of parents) {
+            // 1) 保持父元素继续隐藏
+            // 2) 把目标子元素单独拉出来放在父元素前，保证可见
+            const keepEls = parent.querySelectorAll(childSel);
+            keepEls.forEach((child) => {
+                child.style.display = "";
+                parent.parentElement?.insertBefore(child, parent);
+            });
         }
     }
 }
-// 简略模式保留隐藏元素中指定的子元素 
-// todo  子子孙孙都要考虑到，最好是用递归
-/**
- * 在简略模式中，让部分原本被隐藏的子元素重新显示。
- * @param container 根容器
- * @param rulesStr 多行规则，每行格式为 `父选择器 > 子选择器`（支持子孙选择器）
- */
-function applySimplifiedShowInHidden(container, rulesStr) {
-    const rules = rulesStr
-        .split("\n")
-        .map(line => line.trim())
-        .filter(line => line && !line.startsWith("//")); // 跳过空行和注释行
-    for (const rule of rules) {
-        const [parentSel, childSel] = rule.split(">").map(s => s.trim());
-        if (!parentSel || !childSel)
-            continue;
-        container.querySelectorAll(parentSel).forEach(parent => {
-            const children = parent.querySelectorAll(childSel);
-            children.forEach(child => {
-                child.style.display = "";
-            });
-        });
-    }
+function replaceInternalLinks(doc, apiBaseUrl) {
+    // 提取 basePath，例如 http://localhost:2628/api/query/MW/{word} => /api/query/MW/
+    const baseUrlObj = new URL(apiBaseUrl.replace("{word}", "TEMP"));
+    const basePath = baseUrlObj.pathname.split("TEMP")[0]; // 取前缀部分
+    doc.querySelectorAll(`a[href^="${basePath}"]`).forEach((el) => {
+        const a = el;
+        const hrefRaw = a.getAttribute("href");
+        if (!hrefRaw)
+            return;
+        const href = hrefRaw.split("#")[0];
+        if (!href)
+            return;
+        const word = decodeURIComponent(href.slice(basePath.length)).trim();
+        if (!word)
+            return;
+        const strong = doc.createElement("strong");
+        strong.textContent = word;
+        strong.style.cursor = "pointer";
+        strong.style.color = "#3a6df0";
+        strong.classList.add("local-dict-word-link");
+        a.replaceWith(strong); // 替换 <a> 为 <strong>
+    });
 }
 // ：手动实现 click vs dblclick 识别
 // 这是目前最可靠的方式，适用于任何插件 UI（按钮、词条、面板等）：
@@ -7086,17 +7153,17 @@ const DEFAULT_SETTINGS = {
     // apiBaseUrl: "http://localhost:2628/api/query/Default%20Group/{word}",
     serviceExePath: "E:\\GoldenDict\\WebDict\\SilverDict\\env\\python.exe",
     serviceStartScript: "E:\\GoldenDict\\WebDict\\SilverDict\\Silver Dict CMD.lnk",
-    apiBaseUrl: "http://localhost:2628/api/query/WM/{word}",
-    replaceRulesText: `h2.dre,h4.dre\nh2.ure,h4.ure`,
-    markdownReplaceRulesSummary: "/[ \\t]+\\n/g,\\n\n/\\n{2,}/g,\\n\n/## 韦泊英汉快查词典\\n/,\n/\\n### /g,\\n#### \n/\\n+$/,\\n\\n\n/\\*\\*\\n([^\\n])/g, ** $1",
-    markdownReplaceRulesAll: "/[ \\t]+\\n/g,\\n\n/\\n{2,}/g,\\n\n/## 韦泊英汉快查词典\\n/,\n/\\n### /g,\\n#### \n/\\n+$/,\\n\\n\n/\\*\\*\\n([^\\n])/g, ** $1",
-    copySummaryPrefix: "## {{word}}\n",
+    apiBaseUrl: "http://localhost:2628/api/query/MW/{word}",
+    replaceRulesText: "h2.dre,h4.dre\nh2.ure,h4.ure",
+    markdownReplaceRulesSummary: "/[ \\t]+\\n/g,\\n\n/\\n{2,}/g,\\n\n/## 韦泊英汉快查词典\\n/,\n/^### /g,#### \n/\\n+$/,\\n\\n\n/\\*\\*\\n([^\\n])/g, ** $1\n/\\*\\*([0-9a-z^ ]{1,2}) \\*\\*/g,**$1**",
+    markdownReplaceRulesAll: "/[ \\t]+\\n/g,\\n\n/\\n{2,}/g,\\n\n/## 韦泊英汉快查词典\\n/,\n/^### /g,#### \n/\\n+$/,\\n\\n\n/\\*\\*\\n([^\\n])/g, ** $1\n/\\*\\*([0-9a-z^ ]{1,2}) \\*\\*/g,**$1**",
+    copySummaryPrefix: "\n## {{word}}\n",
     copySummarySuffix: "\n",
-    copyAllPrefix: "## {{word}}\n",
+    copyAllPrefix: "\n## {{word}}\n",
     copyAllSuffix: "\n",
     simplifiedGlobalHideSelectors: "",
-    simplifiedHideSelectors: ".snote\n.bc\nspan.def_text\n.vis_w\n.un_text",
-    simplifiedShowInHiddenSelectors: ".uro_def>.mw_zh\n.un_text>.mw_zh\n.vis_w>.wm_zh\n.snote>.wm_zh",
+    simplifiedHideSelectors: ".bc\n.def_text\n.sd\n//例句\n.vis_w\n.un_text\n//名词 noncount\n.sense .sgram\n.sense .wsgram\n// 派生词\n.uro_line .gram\n",
+    simplifiedShowInHiddenSelectors: ".un_text,.mw_zh\n.uro .vis_w, .vis",
     history: [],
     maxHistory: 500,
     currentHistoryIndex: -1,
@@ -7110,6 +7177,9 @@ class LocalDictPlugin extends obsidian.Plugin {
         super(...arguments);
         this.lastSelectedText = undefined;
         this.view = null;
+    }
+    getCurrentWord() {
+        return this.view?.currentWord || "";
     }
     async loadSettings() {
         //  this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -7222,9 +7292,11 @@ class LocalDictPlugin extends obsidian.Plugin {
                     new obsidian.Notice("Collection file path not set");
                     return;
                 }
-                const resolved = moment().format(path);
-                await appendToFile(this.app, resolved, text + "\n");
-                new obsidian.Notice(`Appended to ${resolved}`);
+                else { //todo 
+                    const resolved = renderTemplate(path, { word: this.getCurrentWord() ?? "", });
+                    await appendToFile(this.app, resolved, text + "\n");
+                    new obsidian.Notice(`已追加内容到： ${resolved}`);
+                }
             },
         });
         this.addCommand({
@@ -7272,7 +7344,7 @@ class LocalDictPlugin extends obsidian.Plugin {
             name: "📘 Local Dict: Insert Copied Summary at Cursor (Right Click)",
             callback: () => this.view?.handleInsertCopySummaryToCursor?.(),
         });
-        //  mark 双击触发。单词的输入点 
+        //  mark 双击触发。单词的输入点
         this.registerDomEvent(document.body, "dblclick", (evt) => {
             if (!this.isViewActive())
                 return; // ✅ 新增：屏蔽未激活时的双击
@@ -7354,6 +7426,7 @@ class LocalDictPlugin extends obsidian.Plugin {
             const pathParts = url.pathname.split("/"); // 得到 ["", "api", "query", "WM"]
             // 提取 "api" 和 "query"
             const query = `${pathParts[1]}/${pathParts[2]}`;
+            const queryGP = `${pathParts[1]}/${pathParts[2]}/${pathParts[3]}`;
             const firstLine = html.split("\n")[0].trim(); //"<p>Entry noncount not found. Suggestions:</p>"
             // 未找到词条且不含有内部链接
             if (!html.includes(query) && firstLine.includes("not found")) {
@@ -7375,27 +7448,7 @@ class LocalDictPlugin extends obsidian.Plugin {
             // ✅ 插入 GoldenDict 查询链接（变为 h3 粗体）
             injectGoldenDictLinkAllAsBlock(doc);
             // ✅ 替换查询链接为粗体 strong 标签（不再绑定事件，这部分保留用于结构替换）
-            doc.querySelectorAll("a[href^='/api/query/WM/']").forEach((el) => {
-                const a = el;
-                const hrefRaw = a.getAttribute("href");
-                if (!hrefRaw)
-                    return;
-                const href = hrefRaw.split("#")[0];
-                if (!href)
-                    return;
-                const match = href.match(/\/api\/query\/WM\/(.+)$/);
-                if (!match)
-                    return;
-                const word = decodeURIComponent(match[1]).trim();
-                if (!word)
-                    return;
-                const strong = doc.createElement("strong");
-                strong.textContent = word;
-                strong.style.cursor = "pointer";
-                strong.style.color = "#3a6df0";
-                strong.classList.add("local-dict-word-link");
-                a.replaceWith(strong); // 替换 <a> 元素为 <strong>
-            });
+            replaceInternalLinks(doc, this.settings.apiBaseUrl);
             // ✅ 准备包裹元素
             const wrap = document.createElement("div");
             wrap.className = "local-dict-html-content";
@@ -7667,6 +7720,7 @@ class WordView extends obsidian.ItemView {
                 .setIcon("lucide-search-check")
                 .onClick(() => {
                 this.plugin.queryWord(selectedText, 0, true);
+                this.inputEl.textContent = this.currentWord;
             }));
             // ✅ 第一项：复制选中文本（原始功能）
             menu.addItem((item) => {
@@ -7685,7 +7739,7 @@ class WordView extends obsidian.ItemView {
                     .onClick(async () => {
                     const success = await insertAtCursor(this.plugin.app, selectedText);
                     if (!success) {
-                        new obsidian.Notice("插入失败：未检测到 Markdown 编辑器");
+                        new obsidian.Notice("插入失败：未检测到活动 Markdown 编辑器");
                     }
                 });
             });
@@ -7699,9 +7753,9 @@ class WordView extends obsidian.ItemView {
                         new obsidian.Notice("未设置收集文件路径");
                         return;
                     }
-                    const resolved = moment().format(path);
+                    const resolved = renderTemplate(path, { word: this.currentWord ?? "" });
                     await appendToFile(this.plugin.app, resolved, selectedText + "\n");
-                    new obsidian.Notice(`已添加到：${resolved}`);
+                    new obsidian.Notice(`已追加内容到：：${resolved}`);
                 });
             });
             menu.showAtMouseEvent(e);
@@ -7807,7 +7861,7 @@ class WordView extends obsidian.ItemView {
                 this.historyContainer.style.display = "none";
             };
             timeEl.title = "右击删除此项";
-            // ✅ 双击：删除当前项（保留面板）
+            // ✅ 右击：删除当前项（保留面板）
             timeEl.oncontextmenu = async () => {
                 const history = this.plugin.settings.history;
                 const indexToRemove = history.findIndex((h) => h.word === word);
@@ -7851,6 +7905,11 @@ class WordView extends obsidian.ItemView {
         // ✅ 滚动到顶部
         // this.contentElInner.scrollTo({ top: 0, behavior: "auto" });
         this.contentEl.scrollTo({ top: 0, behavior: "auto" });
+        // 最后更新输入框内文字
+        console.log("Here is the current word: " + this.currentWord);
+        // this.inputEl.setText(this.currentWord);
+        // this.inputEl.setAttr("text", this.currentWord);
+        this.inputEl.value = this.currentWord;
     }
     //   toggleSimplified() {
     //     this.simplified = !this.simplified;
@@ -7964,8 +8023,14 @@ class WordView extends obsidian.ItemView {
             return;
         }
         if (this.currentWord) {
-            const resolved = moment().format(path);
+            // const resolved = moment().format(path);
+            const resolved = renderTemplate(path, {
+                word: this.currentWord ?? "",
+            });
             await appendToFile(this.plugin.app, resolved, md + "\n");
+        }
+        else {
+            new obsidian.Notice("请先查询单词");
         }
     }
     async handleCopySummaryToFile() {
@@ -7976,8 +8041,14 @@ class WordView extends obsidian.ItemView {
             return;
         }
         if (this.currentWord) {
-            const resolved = moment().format(path);
+            // const resolved = moment().format(path);
+            const resolved = renderTemplate(path, {
+                word: this.currentWord ?? "",
+            });
             await appendToFile(this.plugin.app, resolved, md + "\n");
+        }
+        else {
+            new obsidian.Notice("请先查询单词");
         }
     }
     // 🔧 插入复制全部内容到光标处
@@ -8029,8 +8100,8 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
         };
         // 服务路径设置
         new obsidian.Setting(containerEl)
-            .setName("SilverDict服务进程路径")
-            .setDesc("检测服务是否运行的python.exe进程路径。")
+            .setName("SilverDict 服务进程路径")
+            .setDesc("检测服务时需要比较的 python.exe 进程路径。")
             .addText((text) => text
             .setPlaceholder("进程路径")
             .setValue(this.plugin.settings.serviceExePath)
@@ -8053,6 +8124,7 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
             .setDesc(buildMultilineDesc([
             "本地查询接口 API 的 URL，`{word}` 为要查寻的单词。",
             "例如：http://localhost:2628/api/query/Default Group/{word}",
+            "现确认在浏览器内能正常使用。",
         ]))
             .addText((text) => {
             text
@@ -8101,15 +8173,16 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
         containerEl.createEl("h4", { text: "词典数据收集设置" });
         new obsidian.Setting(containerEl).setDesc(buildMultilineDesc([
             "若填写路径，则每次点击时会将相应的内容时添加到相应此文件。若为空则不收集。",
-            "支持 moment 格式化字符串。不想被格式化的字符串请使用[和]包围，支持多个[]对。",
-            "最好提供带有文件后缀名的全路径字符串，防止出错。",
+            "支持 moment 格式化字符串。",
+            "`Collected/{{YYYY-MM-DD}}.md` ➜ 将内容追加到在 Collected 文件夹中的当天日期文件中。",
+            "`Collected/{{word}}.md` ➜ 在 Collected 文件夹中生成以当前单词为文件名的笔记。",
         ]));
         new obsidian.Setting(containerEl)
-            .setName("收集*复制全部*输出的文件路径")
+            .setName("收集*复制全部*输出内容的文件路径")
             .setDesc("")
             .addText((text) => {
             text
-                .setPlaceholder("如 logs/all-YYYYMMDD.txt")
+                .setPlaceholder("如 [logs/all-YYYYMMDD.txt]")
                 .setValue(this.plugin.settings.copyAllLogPath || "")
                 .onChange(async (value) => {
                 this.plugin.settings.copyAllLogPath = value;
@@ -8117,11 +8190,11 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
             });
         });
         new obsidian.Setting(containerEl)
-            .setName("收集*复制简略*输出的文件路径")
+            .setName("收集*复制简略*输出内容的文件路径")
             .setDesc("")
             .addText((text) => {
             text
-                .setPlaceholder("如 logs/summary-YYYYMMDD.txt")
+                .setPlaceholder("如 [logs/summary-YYYYMMDD.txt]")
                 .setValue(this.plugin.settings.copySummaryLogPath || "")
                 .onChange(async (value) => {
                 this.plugin.settings.copySummaryLogPath = value;
@@ -8129,11 +8202,11 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
             });
         });
         new obsidian.Setting(containerEl)
-            .setName("词典显示区右键：收集文件路径")
+            .setName("词典显示区右键中收集文件的路径")
             .setDesc("")
             .addText((text) => {
             text
-                .setPlaceholder("如 logs/context-YYYYMMDD.txt")
+                .setPlaceholder("如 [logs/context-YYYYMMDD.txt]")
                 .setValue(this.plugin.settings.contextMenuLogPath || "")
                 .onChange(async (value) => {
                 this.plugin.settings.contextMenuLogPath = value;
@@ -8142,9 +8215,10 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
         });
         containerEl.createEl("h4", { text: "词典显示设置" });
         containerEl.createEl("p", {
-            text: "词典显示时先按照下面的元素替换规则进行替换，生成初始版本词典内容。",
+            text: "词典显示时先按照下面的元素替换规则进行替换，得到初始版本词典内容。",
         });
-        containerEl.createEl("p", { text: "之后在显示时按照隐藏规则进行显示。" });
+        containerEl.createEl("p", { text: "之后在显示时按照下方的隐藏规则进行显示。" });
+        containerEl.createEl("p", { text: "本节中所提及的选择器为有效的 CSS 选择器即可。" });
         // 标签替换规则说明 + 设置
         new obsidian.Setting(containerEl)
             .setName("元素替换规则设置")
@@ -8179,7 +8253,7 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
         });
         // 词典元素的隐藏 🔽
         new obsidian.Setting(containerEl)
-            .setName("全局隐藏元素选择器")
+            .setName("全局都要隐藏的元素的选择器")
             .setDesc(buildMultilineDesc([
             "这些元素在显示全部和简略时都会被隐藏。",
             "每行一个 CSS 选择器。",
@@ -8198,8 +8272,8 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
             applyTextAreaStyle(text.inputEl);
         });
         new obsidian.Setting(containerEl)
-            .setName("简略模式下隐藏元素选择器")
-            .setDesc("仅在简略模式下被隐藏的元素，每行一个选择器。")
+            .setName("简略模式下要隐藏的元素的选择器")
+            .setDesc("仅在简略模式下被隐藏的元素，每行一个 CSS 选择器。")
             .addTextArea((text) => {
             text
                 .setValue(this.plugin.settings.simplifiedHideSelectors)
@@ -8214,13 +8288,17 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
             applyTextAreaStyle(text.inputEl);
         });
         new obsidian.Setting(containerEl)
-            .setName("简略模式保留显示的子元素选择器")
+            .setName("简略模式下仍然保持显示的隐藏元素的子元素选择器")
             .setDesc(buildMultilineDesc([
-            "这些子元素即使在隐藏父元素时也会被显示。",
-            "每行一个选择器对，使用`>`连接。",
+            "从被隐藏的元素中恢复显示特定子元素。",
+            "格式：每行一个规则，，使用`,`连接。例如：",
+            "1. `.entry, .ure` 表示保留 `.entry` 内的 `.ure` 元素",
+            "2. `.example, span.note` 表示保留 `.example` 中的 `span.note`",
+            "3. `.highlight` 表示同时为父子选择器，保留该类元素",
         ]))
             .addTextArea((text) => {
             text
+                .setPlaceholder(`示例：\n.entry，.ure\n.example, span.note\n.highlight`)
                 .setValue(this.plugin.settings.simplifiedShowInHiddenSelectors)
                 .onChange(async (value) => {
                 this.plugin.settings.simplifiedShowInHiddenSelectors = value;
@@ -8292,7 +8370,6 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
             "- `{{word}}` 表示当前查询词",
             "- 任意 moment.js 时间格式：如 `{{YYYY-MM-DD}}`, `{{HH:mm:ss}}` 等",
             "- 可使用 \\n 表示换行，\\t 表示制表符，\\\\ 表示反斜杠，\\, 表示逗号",
-            "",
             "示例：",
             "- 前缀：`## {{word}} \\n【查询时间：{{YYYY-MM-DD HH:mm}}】`",
             "- 后缀：`\\n---\\n来自本地词典`",

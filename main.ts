@@ -80,21 +80,22 @@ const DEFAULT_SETTINGS: LocalDictPluginSettings = {
     "E:\\GoldenDict\\WebDict\\SilverDict\\Silver Dict CMD.lnk",
   apiBaseUrl: "http://localhost:2628/api/query/MW/{word}",
 
-  replaceRulesText: `h2.dre,h4.dre\nh2.ure,h4.ure`,
+  replaceRulesText: "h2.dre,h4.dre\nh2.ure,h4.ure",
   markdownReplaceRulesSummary:
-    "/[ \\t]+\\n/g,\\n\n/\\n{2,}/g,\\n\n/## 韦泊英汉快查词典\\n/,\n/\\n### /g,\\n#### \n/\\n+$/,\\n\\n\n/\\*\\*\\n([^\\n])/g, ** $1",
+    "/[ \\t]+\\n/g,\\n\n/\\n{2,}/g,\\n\n/## 韦泊英汉快查词典\\n/,\n/^### /g,#### \n/\\n+$/,\\n\\n\n/\\*\\*\\n([^\\n])/g, ** $1\n/\\*\\*([0-9a-z^ ]{1,2}) \\*\\*/g,**$1**",
   markdownReplaceRulesAll:
-    "/[ \\t]+\\n/g,\\n\n/\\n{2,}/g,\\n\n/## 韦泊英汉快查词典\\n/,\n/\\n### /g,\\n#### \n/\\n+$/,\\n\\n\n/\\*\\*\\n([^\\n])/g, ** $1",
+    "/[ \\t]+\\n/g,\\n\n/\\n{2,}/g,\\n\n/## 韦泊英汉快查词典\\n/,\n/^### /g,#### \n/\\n+$/,\\n\\n\n/\\*\\*\\n([^\\n])/g, ** $1\n/\\*\\*([0-9a-z^ ]{1,2}) \\*\\*/g,**$1**",
 
-  copySummaryPrefix: "## {{word}}\n",
+  copySummaryPrefix: "\n## {{word}}\n",
   copySummarySuffix: "\n",
-  copyAllPrefix: "## {{word}}\n",
+  copyAllPrefix: "\n## {{word}}\n",
   copyAllSuffix: "\n",
 
   simplifiedGlobalHideSelectors: "",
-  simplifiedHideSelectors: ".snote\n.bc\nspan.def_text\n.vis_w\n.un_text",
+  simplifiedHideSelectors:
+    ".bc\n.def_text\n.sd\n//例句\n.vis_w\n.un_text\n//名词 noncount\n.sense .sgram\n.sense .wsgram\n// 派生词\n.uro_line .gram\n",
   simplifiedShowInHiddenSelectors:
-    ".uro_def,.mw_zh\n.un_text,.mw_zh\n.vis_w,.wm_zh\n.snote,.wm_zh",
+    ".un_text,.mw_zh\n.uro .vis_w, .vis",
   history: [],
   maxHistory: 500,
   currentHistoryIndex: -1,
@@ -238,7 +239,7 @@ export default class LocalDictPlugin extends Plugin {
         if (!path) {
           new Notice("Collection file path not set");
           return;
-        } else {   //todo 
+        } else {    
           const resolved = renderTemplate(path, { word: this.getCurrentWord()?? "", });
           await appendToFile(this.app, resolved, text + "\n");
           new Notice(`已追加内容到： ${resolved}`);
@@ -750,6 +751,7 @@ class WordView extends ItemView {
       placeholder: "输入单词",
     });
 
+
     this.searchBtn = searchBar.createEl("button", { text: "搜索" });
 
     const doSearch = () => {
@@ -955,7 +957,7 @@ class WordView extends ItemView {
 
       timeEl.title = "右击删除此项";
 
-      // ✅ 双击：删除当前项（保留面板）
+      // ✅ 右击：删除当前项（保留面板）
       timeEl.oncontextmenu = async () => {
         const history = this.plugin.settings.history;
         const indexToRemove = history.findIndex((h) => h.word === word);
@@ -1009,6 +1011,12 @@ class WordView extends ItemView {
     // ✅ 滚动到顶部
     // this.contentElInner.scrollTo({ top: 0, behavior: "auto" });
     this.contentEl.scrollTo({ top: 0, behavior: "auto" });
+
+    // 最后更新输入框内文字
+    console.log("Here is the current word: "+this.currentWord);
+    // this.inputEl.setText(this.currentWord);
+    // this.inputEl.setAttr("text", this.currentWord);
+    this.inputEl.value= this.currentWord
   }
 
   //   toggleSimplified() {
@@ -1575,7 +1583,6 @@ class LocalDictSettingTab extends PluginSettingTab {
           "- `{{word}}` 表示当前查询词",
           "- 任意 moment.js 时间格式：如 `{{YYYY-MM-DD}}`, `{{HH:mm:ss}}` 等",
           "- 可使用 \\n 表示换行，\\t 表示制表符，\\\\ 表示反斜杠，\\, 表示逗号",
-          "",
           "示例：",
           "- 前缀：`## {{word}} \\n【查询时间：{{YYYY-MM-DD HH:mm}}】`",
           "- 后缀：`\\n---\\n来自本地词典`",

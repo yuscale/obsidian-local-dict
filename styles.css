@@ -185,6 +185,8 @@ local-dict-toggle-btn {
     gap: 0;
 }
 
+/* 自己的 button 样式 <全部简略> */
+.
 /* 通用按钮样式 */
 .nav-btn {
     width: 28px;
@@ -359,7 +361,8 @@ span.hw_txt.gfont,
     font-size: 1rem;
 }
 
-.mw_spm_it {
+.mw_spm_it,
+.mw_spm_phrase {
     color: var(--color-purple);
 }
 
@@ -401,5 +404,3 @@ span.hw_txt.gfont,
 }
 
 
-/* 自己的 button 样式 <全部简略> */
-.

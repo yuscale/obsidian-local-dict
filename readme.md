@@ -5,13 +5,15 @@ Created Date: 2025-07-09 08:59:39 Wednesday
 Author: Scale Yu
 E-mail: yuscale@126.com
 
-Last Modified: 2025-07-12 00:58:06 Saturday
+Last Modified: 2025-07-12 04:47:08 Saturday
 Modified By: Scale Yu
 ---
 
+![动态展示 Demo](<doc/动态展示 Demo.gif>)
 
+![功能展示 Intro](<doc/功能展示 Intro.png>)
 
-# Local Dictionary 插件使用说明
+# Local Dictionary 插件使用说明 [^ai]
 
 ## 🌟 插件简介
 
@@ -53,13 +55,11 @@ npm install --save-dev obsidian
 npm run build
 ```
 
-
 开发调试时：
 
 ```bash
 npm run dev
 ```
----
 
 ## 🔍 调试与开发提示
 
@@ -67,11 +67,6 @@ npm run dev
 - **如果打包卡住或报错，使用 `Ctrl + C` 可以中断进程，确认后再重新开始！**
 - 打包完成后，需在 Obsidian 中点击“重新加载插件”；
 - 若插件失效，请确认控制台中是否有错误信息（开发者工具）。
-
----
-
-
-
 
 ## 🚀 安装使用
 
@@ -91,10 +86,6 @@ npm run dev
 3. 打开词典视图：
 
 - 你可以使用命令面板 `Ctrl+P` → 搜索“Open Local Dict Viewer”，或在设置中绑定快捷键（详见下文命令说明）。
-
----
-
----
 
 ## 🧰 服务依赖配置指南（简要）
 
@@ -148,8 +139,6 @@ npm run dev
 | **可执行文件路径**  | `D:\Tools\SilverDict\env\python.exe` *(用于检测是否已启动)* |
 
 
-
-
 ## 🚀 亮点功能
 
 - ✅ **双击主编辑器中的英文单词** 会自动唤起词典查询功能（需开启服务端程序如 [SilverDict](https://github.com/CatMuse/SilverDict)）
@@ -163,8 +152,6 @@ npm run dev
 - ✅ 自定义隐藏选择器，控制哪些元素在简略模式下显示或隐藏，实现所见即所复制
 - ✅ 插件设置中可查看并导出历史记录
 
----
-
 ## 🧠 使用技巧
 
 - **双击查词** 是本插件最核心、最方便的功能！只需双击任意英文单词，即可快速展开查询。
@@ -177,8 +164,6 @@ npm run dev
 - 设置中查看的历史列表字段是只读的，但可以复制。
 - `导出历史记录`：每行一个词，可用于单词复习
 - `切换显示状态`：支持全部 / 简略视图切换按钮，实时反映状态
-
----
 
 ## 💡 核心功能
 
@@ -223,7 +208,6 @@ npm run dev
 - 双击词条右侧时间戳可删除该记录
 - 使用左右箭头进行前进 / 后退历史导航
 
----
 
 ## ⚙️ 插件设置说明
 
@@ -233,9 +217,9 @@ npm run dev
 
 | 设置项                      | 说明 |
 | ---------------- | -------------------- |
-| SilverDict服务进程路径     | 用于检测 SilverDict 是否已运行的 Python 进程路径，例如：`C:\Python38\python.exe`。<br>Path to the `python.exe` used to detect whether SilverDict is already running.|
-| 启动服务脚本路径         | 点击“开启服务”按钮时会执行的脚本路径，推荐使用 `.bat` 或 `.lnk` 文件启动 SilverDict。<br>Path to the script executed when starting the service manually.|
-| 词典服务查询 URL           | 查询词典的接口地址，需包含 `{word}` 占位符，例如：<br>`http://localhost:2628/api/query/Default Group/{word}`<br>用于向 SilverDict 或其他本地服务发送查询请求。空格将自动替换为 `%20`，但 `{word}` 不应被编码。<br>The local dictionary query API URL. Must contain `{word}` as placeholder. Spaces will be encoded to `%20`. `{word}` will be replaced at runtime with the word to look up. |
+| SilverDict服务进程路径     | 用于检测 SilverDict 是否已运行的 Python 进程路径，例如：`C:\Python38\python.exe`。|
+| 启动服务脚本路径         | 点击“开启服务”按钮时会执行的脚本路径，推荐使用 `.bat` 或 `.lnk` 文件启动 SilverDict。|
+| 词典服务查询 URL           | 查询词典的接口地址，需包含 `{word}` 占位符，例如：<br>`http://localhost:2628/api/query/Default Group/{word}`<br>用于向 SilverDict 或其他本地服务发送查询请求。空格将自动替换为 `%20`，但 `{word}` 不应被编码。|
 
 - {word} 是必须的占位符，插件会在查询时将其替换为实际单词（经过 encodeURIComponent 编码）；
 - 支持包含空格（将被自动转为 %20）；
@@ -247,7 +231,8 @@ npm run dev
 
 | 设置项  | 说明 |
 | --------------------- | ------------------------------------ |
-| 双击识别延迟（毫秒）<br>Double-click delay (ms) | 设置区分“单击 / 双击”的最大间隔时间，单位为毫秒，默认为 `300`。 |
+| 双击识别延迟（毫秒）| 设置区分“单击 / 双击”的最大间隔时间，单位为毫秒，默认为 `300`。 |
+
 例如：若你点击太快被识别为双击，可将其调高；若双击响应太慢，可适当调低。
 
 💡 该设置会影响：
@@ -290,7 +275,7 @@ npm run dev
 dict-log/{{YYYY-MM-DD}}.md
 ```
 
-将内容追加到 `dict-log/2025-07-11.md` 文件中。
+将内容追加到 `dict-log/2025-05-01.md` 文件中。
 
 ##### 示例 2：每个单词一个文件
 
@@ -306,7 +291,7 @@ dict-by-word/{{word}}.md
 logs/{{YYYY-MM-DD}}-{{word}}.md
 ```
 
-查询 `time` 单词时写入 `logs/2025-07-11-time.md`。
+查询 `time` 单词时写入 `logs/2025-05-01-time.md`。
 
 ---
 
@@ -470,23 +455,21 @@ a b , em
 查询 example，Markdown 内容为 **some content**，生成结果将为：
 
 ```md
-# example 查词于 2025-07-11
+# example 查词于 2025-05-01
 ---
 **some content**
 来源：本地词典
 ```
 
-
 ### 🕘 查询历史记录
 
 - ✅ 所有查询自动记录在历史中
-- ✅ 记录时间格式为 `20250703 120303`
+- ✅ 记录时间格式为 `20250501 120000`
 - ✅ 历史记录支持前进 / 后退、删除、导出、清空等操作
 - ✅ 可在设置面板中查看、复制（逗号分隔）、导出（每行一项）
 - ✅ 一键导出历史记录（每行一个，逗号分隔）
 
 
----
 
 ## 📋 可用命令（Command Palette）
 
@@ -510,12 +493,7 @@ a b , em
 | `append-selection-to-collection`       | 将词典中选中的文本追加到收集文件（右键菜单）<br>Append selected dictionary text to collection file (context menu)                    |
 
 
-
-
-
 > 💡 默认无快捷键，建议在「设置 → 快捷键」中绑定常用功能。
-
----
 
 
 ## 📄 TODO（开发中功能）
@@ -525,7 +503,6 @@ a b , em
 - [ ] 多词查询合并展示
 - [ ] Obsidian 编辑器内直接替换选中词语（增强双击功能）
 
----
 
 ## 🔚 结语
 
@@ -536,7 +513,6 @@ a b , em
 如需改进建议或二次开发，请保留作者注释，欢迎反馈与贡献！
 如有建议、bug 或想法，欢迎前往项目主页提交 Issue 或 PR 🎉
 
----
 
 ## ❓ Q&A（常见问题与解答）
 
@@ -550,7 +526,6 @@ a b , em
 - 插件内部通过判断 `view.containerEl.isConnected && !!view.containerEl.offsetParent` 来确认视图是否在页面中显示；
 - 如果关闭了右栏或切换到其他插件视图，双击事件会自动失效以避免误触。
 
----
 
 ### Q2: 为什么右键“插入到当前文件”功能提示失败？
 >
@@ -562,7 +537,6 @@ a b , em
 - 插件使用 `this.app.workspace.getActiveViewOfType(MarkdownView)` 方式定位当前编辑器；
 - 某些 UI 操作（如右键）会临时让焦点失效，建议使用命令面板或快捷键增强体验。
 
----
 
 ### Q3: 命令和按钮功能重复，如何理解双击与右键的区别？
 
@@ -574,7 +548,38 @@ a b , em
 
 > ✅ 这些功能都通过插件设置和命令面板支持，确保不同使用习惯都可满足。
 
+
+### Q4: 我希望设置更灵活的“双击查词”间隔，可以调节吗？
+>
+> 💬 **是的可以！** 插件允许你自定义点击与双击判定的时间间隔。
+
+**操作方式：**
+
+- 打开插件设置，找到“双击时间间隔”字段；
+- 默认值为 `300ms`，可以根据你的点击习惯调整为更短（如 `200`）或更长（如 `400`）；
+- 设置立即生效，无需重启插件。
+
 ---
+
+### Q5: 为什么简略模式下我设置了保留的子元素仍然不显示？
+>
+> 💬 **可能的原因**是你保留的子元素在“父元素本身不可见”时无法被选中。
+
+**解决方案：**
+
+- 插件提供了一个功能：**简略模式保留隐藏元素中的子元素**，它会在已隐藏父元素中临时显示部分子内容；
+- 但前提是你在设置中也明确了该父元素在“简略模式下隐藏”中；
+- 推荐使用结构清晰的格式，例如：
+
+  ```
+  .entry > .ure
+  .z.b > span.highlight
+  .wrapper .block > .inner
+  ```
+
+[^ai] 这个文件接近100%的内容均有 ai 生成，我只做了整理和编辑，仅书写微量的文字。
+
+> 下边是手工写的，为了便于查看，连接到此。
 
 ![[Q&A.md]]
 
