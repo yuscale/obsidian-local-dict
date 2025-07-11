@@ -2,8 +2,10 @@
 
 # private files
 OLD/
-**/*.p.md      # Private notes (e.g., notes that are not meant to be shared)
-**/*.p.ts      # Private files for ref (e.g., files for ref that are not meant to be shared)
+# Private notes (e.g., notes that are not meant to be shared)
+**/*.p.md
+# Private files for ref (e.g., files for ref that are not meant to be shared)
+**/*.p.ts      
 *.gitignore  # self
 dist/
 note/
@@ -12,16 +14,21 @@ obsidian.css
 !**/*.ts
 !**/*.md
 
-# Node.js
+# Node.js -------
+
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-store/
-dist/          # Compiled output (e.g., from TypeScript, Webpack, Rollup)
-build/         # Another common compiled output directory
-*.tsbuildinfo  # TypeScript build info files
-.env           # Environment variables (sensitive info!)
+# Compiled output (e.g., from TypeScript, Webpack, Rollup)
+dist/         
+# Another common compiled output directory
+build/
+# TypeScript build info files
+*.tsbuildinfo  
+# Environment variables (sensitive info!)
+.env           
 .env.local
 .env.*.local
 
@@ -33,8 +40,10 @@ Thumbs.db
 Desktop.ini
 
 # IDEs and Editors
-.vscode/        # VS Code specific files (e.g., settings, launch configs)
-.idea/          # IntelliJ IDEA specific files
+# VS Code specific files (e.g., settings, launch configs)
+.vscode/         
+# IntelliJ IDEA specific files
+.idea/          
 *.sublime-project
 *.sublime-workspace
 .project

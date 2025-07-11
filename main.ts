@@ -56,6 +56,7 @@ interface LocalDictPluginSettings {
   simplifiedGlobalHideSelectors: string;
   simplifiedHideSelectors: string;
   simplifiedShowInHiddenSelectors: string;
+
   // history: string[]; // ✅ 添加历史记录字段
   history: { word: string; time: string }[];
   maxHistory: number; // ✅ 添加最大历史记录字段
@@ -1256,8 +1257,8 @@ class LocalDictSettingTab extends PluginSettingTab {
 
     // 服务路径设置
     new Setting(containerEl)
-      .setName("SilverDict服务进程路径")
-      .setDesc("检测服务是否运行的python.exe进程路径。")
+      .setName("SilverDict 服务进程路径")
+      .setDesc("检测服务时需要比较的 python.exe 进程路径。")
       .addText((text) =>
         text
           .setPlaceholder("进程路径")
@@ -1287,6 +1288,7 @@ class LocalDictSettingTab extends PluginSettingTab {
           buildMultilineDesc([
             "本地查询接口 API 的 URL，`{word}` 为要查寻的单词。",
             "例如：http://localhost:2628/api/query/Default Group/{word}",
+            "现确认在浏览器内能正常使用。",
           ])
         )
         .addText((text) => {
@@ -1352,6 +1354,7 @@ class LocalDictSettingTab extends PluginSettingTab {
         "若填写路径，则每次点击时会将相应的内容时添加到相应此文件。若为空则不收集。",
         "支持 moment 格式化字符串。不想被格式化的字符串请使用[和]包围，支持多个[]对。",
         "最好提供带有文件后缀名的全路径字符串，防止出错。",
+        "[daily]/YYYYMMDD[.md] 指向 daily/20250511",
       ])
     );
 
@@ -1360,7 +1363,7 @@ class LocalDictSettingTab extends PluginSettingTab {
       .setDesc("")
       .addText((text) => {
         text
-          .setPlaceholder("如 logs/all-YYYYMMDD.txt")
+          .setPlaceholder("如 [logs/all-YYYYMMDD.txt]")
           .setValue(this.plugin.settings.copyAllLogPath || "")
           .onChange(async (value) => {
             this.plugin.settings.copyAllLogPath = value;
@@ -1373,7 +1376,7 @@ class LocalDictSettingTab extends PluginSettingTab {
       .setDesc("")
       .addText((text) => {
         text
-          .setPlaceholder("如 logs/summary-YYYYMMDD.txt")
+          .setPlaceholder("如 [logs/summary-YYYYMMDD.txt]")
           .setValue(this.plugin.settings.copySummaryLogPath || "")
           .onChange(async (value) => {
             this.plugin.settings.copySummaryLogPath = value;
@@ -1386,7 +1389,7 @@ class LocalDictSettingTab extends PluginSettingTab {
       .setDesc("")
       .addText((text) => {
         text
-          .setPlaceholder("如 logs/context-YYYYMMDD.txt")
+          .setPlaceholder("如 [logs/context-YYYYMMDD.txt]")
           .setValue(this.plugin.settings.contextMenuLogPath || "")
           .onChange(async (value) => {
             this.plugin.settings.contextMenuLogPath = value;
@@ -1481,8 +1484,11 @@ class LocalDictSettingTab extends PluginSettingTab {
       .setName("简略模式保留显示的子元素选择器")
       .setDesc(
         buildMultilineDesc([
-          "这些子元素即使在隐藏父元素时也会被显示。",
-          "每行一个选择器对，使用`>`连接。",
+          "从被隐藏的元素中恢复显示特定子元素。",
+          "格式：每行一个规则，，使用`>`连接。例如：",
+          "1. `.entry > .ure` 表示保留 `.entry` 内的 `.ure` 元素",
+          "2. `.example > span.note` 表示保留 `.example` 中的 `span.note`",
+          "3. `.highlight` 表示同时为父子选择器，保留该类元素",
         ])
       )
       .addTextArea((text) => {
