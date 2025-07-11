@@ -10,6 +10,30 @@ export function resolveLogPath(template: string): string {
 }
 
 
+/**
+ * 渲染模板字符串，支持 {{word}} 变量 和 moment 格式化，如 {{YYYY-MM-DD}}。
+ * @param template 模板字符串
+ * @param context 传入上下文变量，如 { word: 'example' }
+ * @returns 替换后的字符串
+ */
+export function renderTemplate(
+  template: string,
+  context: Record<string, string>
+): string {
+  return template.replace(/\{\{(.*?)\}\}/g, (_, token) => {
+    token = token.trim();
+    if (context[token] !== undefined) return context[token];
+    try {
+      return moment().format(token); // 尝试当作日期格式化
+    } catch {
+      return `{{${token}}}`; // 保留原样，避免报错
+    }
+  });
+}
+
+
+
+
 // 插入对应 Markdown 内容到当前活动编辑器的光标处；
 export async function insertAtCursor(app: App, text: string): Promise<boolean> {
   // 获取当前活动文件
@@ -25,13 +49,13 @@ export async function insertAtCursor(app: App, text: string): Promise<boolean> {
   // 获取 Markdown 编辑器视图
   const view = app.workspace.getActiveViewOfType(MarkdownView);
   if (!view || !view.editor) {
-    new Notice("无法插入：未检测到 Markdown 编辑器");
+    new Notice("无法插入：未检测到活动 Markdown 编辑器");
     return false;
   }
 
   // 插入文本
   view.editor.replaceSelection(text);
-  new Notice("已插入内容到当前文件");
+  new Notice("已插入内容到当前文件中");
   return true;
 }
 
@@ -598,7 +622,7 @@ export function formatMarkdownOutput0(
   prefixTpl: string,
   suffixTpl: string
 ): string {
-  const render = (tpl: string) => // todo   /t/n
+  const render = (tpl: string) => 
     tpl.replace(/\{\{(.*?)\}\}/g, (_, token) => {
       token = token.trim();
       if (token === "word") return word;
@@ -634,22 +658,130 @@ export function applySimplifiedView(
 
   if (simplified) {
     // applySimplifiedHide(container, settings.simplifiedHideSelectors);
-    applySimplifiedHide(container, settings.simplifiedHideSelectors, settings.simplifiedShowInHiddenSelectors);
-
-    applySimplifiedShowInHidden(container,settings.simplifiedHideSelectors, settings.simplifiedShowInHiddenSelectors);
+    // applySimplifiedHide(container, settings.simplifiedHideSelectors, settings.simplifiedShowInHiddenSelectors);
+    // applySimplifiedShowInHidden(container , settings.simplifiedShowInHiddenSelectors);
+    applySimplifiedFilter(container, settings.simplifiedHideSelectors, settings.simplifiedShowInHiddenSelectors);
   }
 }
 
 
 // 始终隐藏元素
 function applyGlobalHide(container: HTMLElement, selectorsText: string) {
-  const selectors = selectorsText.split("\n").map(s => s.trim()).filter(Boolean);
+  const selectors = selectorsText.split("\n").map(s => s.trim()).filter((l) => l && !l.startsWith("//")).filter(Boolean);
   selectors.forEach(selector => {
     container.querySelectorAll(selector).forEach(el => {
       (el as HTMLElement).style.display = "none";
     });
   });
 }
+
+
+
+
+// applySimplifiedHide;applySimplifiedShowInHidden;合二为一了
+
+/**
+ * 统一的「简略模式过滤」⼯具。
+ *
+ * 1. **全局隐藏**：`hideSelectorsText`  — 每⾏⼀个 CSS 选择器，直接隐藏；
+ * 2. **仅保留指定⼦元素**：`keepSelectorsText`
+ *    - 每⾏ `父选择器 , ⼦选择器`（逗号分隔，允许空格）
+ *    - 先隐藏父，再把指定的⼦（或孙）元素重新显示
+ *
+ * @example
+ * hideSelectorsText:
+ * ```txt
+ * .hidden_text
+ * .vis_w
+ * span.def_labels
+ * ```
+ *
+ * keepSelectorsText:
+ * ```txt
+ * .uro_def , .mw_zh          // 只保留 uro_def 里的中文释义
+ * .un_text  , .mw_zh         // 同上
+ * .snote    , span.note-tag  // 只保留 snote 里的 note‑tag
+ * ```
+ */
+export function applySimplifiedFilter(
+  container: HTMLElement,
+  hideSelectorsText: string,
+  keepSelectorsText: string
+) {
+  /* ---------- 1. 先统一隐藏 ---------- */
+  hideSelectorsText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("//"))
+    .forEach((sel) => {
+      container.querySelectorAll<HTMLElement>(sel).forEach((el) => {
+        el.style.display = "none";
+      });
+    });
+
+  /* ---------- 2. 解析「仅保留指定子元素」规则 ---------- */
+  const keepRules = keepSelectorsText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("//"))
+    .map((l) => {
+      const [parentSel, childSel] = l.split(",").map((s) => s.trim());
+      return { parentSel, childSel };
+    })
+    .filter((r) => r.parentSel && r.childSel);
+
+  /* ---------- 3. 逐条规则处理 ---------- */
+  for (const { parentSel, childSel } of keepRules) {
+    // 找到所有父元素（即使它们被隐藏）
+    const parents = Array.from(
+      container.querySelectorAll<HTMLElement>(parentSel)
+    );
+
+    for (const parent of parents) {
+      // 1) 保持父元素继续隐藏
+      // 2) 把目标子元素单独拉出来放在父元素前，保证可见
+      const keepEls = parent.querySelectorAll<HTMLElement>(childSel);
+      keepEls.forEach((child) => {
+        child.style.display = "";
+        parent.parentElement?.insertBefore(child, parent);
+      });
+    }
+  }
+}
+
+
+
+export function replaceInternalLinks(doc: Document, apiBaseUrl: string) {
+  // 提取 basePath，例如 http://localhost:2628/api/query/MW/{word} => /api/query/MW/
+  const baseUrlObj = new URL(apiBaseUrl.replace("{word}", "TEMP"));
+  const basePath = baseUrlObj.pathname.split("TEMP")[0]; // 取前缀部分
+
+  doc.querySelectorAll(`a[href^="${basePath}"]`).forEach((el) => {
+    const a = el as HTMLAnchorElement;
+    const hrefRaw = a.getAttribute("href");
+    if (!hrefRaw) return;
+
+    const href = hrefRaw.split("#")[0];
+    if (!href) return;
+
+    const word = decodeURIComponent(href.slice(basePath.length)).trim();
+    if (!word) return;
+
+    const strong = doc.createElement("strong");
+    strong.textContent = word;
+    strong.style.cursor = "pointer";
+    strong.style.color = "#3a6df0";
+    strong.classList.add("local-dict-word-link");
+
+    a.replaceWith(strong); // 替换 <a> 为 <strong>
+  });
+}
+
+
+
+
+
+
 
 // 简略模式隐藏元素
 // mark 有了新了新版本 带有三个参数
@@ -680,10 +812,138 @@ function parseSimplifiedShowRules(rulesStr: string): SimplifiedShowRule[] {
     });
 }
 
+/* ------------------------------------------------------------------ *
+ * 简略模式 – 隐藏元素 & 可保留指定子元素                              *
+ * ------------------------------------------------------------------ */
+
+/**
+ * 在简略模式下隐藏元素，并允许针对某些父元素保留其指定子元素。
+ *
+ * @param container            根节点
+ * @param hideSelectorsText    “要隐藏的选择器” 多行字符串（每行一个选择器；可包含注释 //）
+ * @param showInHiddenText     “在隐藏父元素中要保留的子元素” 多行字符串（规则格式见下）
+ *
+ * 规则格式示例
+ * ─────────────────────────────────────────────────────────
+ * hideSelectorsText :
+ *   .hidden_text
+ *   .vis_w
+ *   .uro_def
+ *
+ * showInHiddenText (每行一条) :
+ *   .uro_def > .mw_zh           // 只保留 uro_def 里的 .mw_zh
+ *   .vis_w > li:first-child     // 保留例句里的第一条
+ *   .sblocks                    // 只有一个选择器时，表示父==子：整块显示
+ * ------------------------------------------------------------------ */
+export function applySimplifiedHide(
+  container: HTMLElement,
+  hideSelectorsText: string,
+  showInHiddenText: string = ""
+) {
+  /* ---------- 1. 解析「隐藏选择器」 ---------- */
+  const hideSelectors = hideSelectorsText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("//"));
+
+  /* ---------- 2. 解析「保留子元素规则」 ---------- */
+  interface KeepRule {
+    parentSel: string;   // 父选择器
+    childSel: string;    // 子选择器（允许与父相同）
+  }
+
+  const keepRules: KeepRule[] = showInHiddenText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("//"))
+    .flatMap((raw) => {
+      const segs = raw.split(">").map((s) => s.trim()).filter(Boolean);
+      if (segs.length === 1) {
+        // 只有一个选择器：父 == 子
+        return [{ parentSel: segs[0], childSel: segs[0] }];
+      } else {
+        return [
+          {
+            parentSel: segs.slice(0, -1).join(" > "),
+            childSel: segs[segs.length - 1],
+          },
+        ];
+      }
+    });
+
+  /* ---------- 3. 逐个隐藏，同时检查是否需要保留子元素 ---------- */
+  hideSelectors.forEach((sel) => {
+    container.querySelectorAll<HTMLElement>(sel).forEach((el) => {
+      /** 找到针对该元素命中的保留规则 */
+      const targetRules = keepRules.filter((r) => el.matches(r.parentSel));
+
+      if (targetRules.length === 0) {
+        // —— 完全没有保留规则，直接隐藏父元素自己
+        el.style.display = "none";
+        return;
+      }
+
+      // —— 有保留规则：父元素自己保持显示，但要遍历子元素，按规则决定隐藏/保留
+      Array.from(el.children).forEach((child) => {
+        const keep = targetRules.some((r) =>
+          (child as HTMLElement).matches(r.childSel)
+        );
+        if (!keep) (child as HTMLElement).style.display = "none";
+      });
+    });
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * 简略模式 – 在已隐藏父元素中显示指定子元素                           *
+ * ------------------------------------------------------------------ */
+
+/**
+ * 当 applySimplifiedHide 已经执行以后，如果某些父元素还是被整体隐藏，
+ * 可以再用该函数“反向”把特定子元素+祖先显示出来。
+ *
+ * @param container       根节点
+ * @param showRulesStr    多行：同上面的 showInHiddenText 语法
+ */
+export function applySimplifiedShowInHidden(
+  container: HTMLElement,
+  showRulesStr: string
+) {
+  const showRules = showRulesStr
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("//"));
+
+  showRules.forEach((raw) => {
+    const segs = raw.split(">").map((s) => s.trim()).filter(Boolean);
+    if (segs.length === 0) return;
+
+    const parentSel =
+      segs.length === 1 ? segs[0] : segs.slice(0, -1).join(" > ");
+    const childSel = segs[segs.length - 1];
+
+    container.querySelectorAll<HTMLElement>(parentSel).forEach((parent) => {
+      /* ① 先把 parent 及其祖先链恢复 display（直到 container） */
+      let cur: HTMLElement | null = parent;
+      while (cur && cur !== container) {
+        if (cur.style.display === "none") cur.style.display = "";
+        cur = cur.parentElement;
+      }
+
+      /* ② 针对 parent 内部：只显示符合 childSel 的元素，其余兄弟保持隐藏 */
+      parent.querySelectorAll<HTMLElement>(childSel).forEach((keep) => {
+        keep.style.display = "";
+      });
+    });
+  });
+}
+
+
+
 /**
  * 简略模式隐藏元素，同时保留内部需要显示的子元素。
  */
-export function applySimplifiedHide(
+export function applySimplifiedHide1(
   container: HTMLElement,
   hideSelectorsText: string,
   showInHiddenText?: string
@@ -691,6 +951,7 @@ export function applySimplifiedHide(
   const hideSelectors = hideSelectorsText
     .split("\n")
     .map((s) => s.trim())
+    .filter((l) => l && !l.startsWith("//"))
     .filter(Boolean);
 
   const showRules = showInHiddenText
@@ -739,7 +1000,7 @@ export function applySimplifiedHide(
  * 2. 逻辑：逐行读取 showRules，定位父元素 → 寻找要保留的子元素 → 把它们重新显示，
  *    同时**保持未命中的兄弟节点继续隐藏**。
  */
-export function applySimplifiedShowInHidden(
+export function applySimplifiedShowInHidden1(
   container: HTMLElement,
   hideRulesStr: string,
   showRulesStr: string

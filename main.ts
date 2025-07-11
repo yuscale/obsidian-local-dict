@@ -19,6 +19,7 @@ import moment from "moment";
 
 import {
   insertAtCursor,
+  replaceInternalLinks,
   bindClickAndDoubleClickWithSetting,
   appendToFile,
   applySimplifiedView,
@@ -33,6 +34,7 @@ import {
   postProcessMarkdownCopySummary,
   removeStyleTags,
   replaceTagClassByRules,
+  renderTemplate,
   resolveLogPath,
   insertToActiveEditor,
 } from "./utils";
@@ -76,7 +78,7 @@ const DEFAULT_SETTINGS: LocalDictPluginSettings = {
   serviceExePath: "E:\\GoldenDict\\WebDict\\SilverDict\\env\\python.exe",
   serviceStartScript:
     "E:\\GoldenDict\\WebDict\\SilverDict\\Silver Dict CMD.lnk",
-  apiBaseUrl: "http://localhost:2628/api/query/WM/{word}",
+  apiBaseUrl: "http://localhost:2628/api/query/MW/{word}",
 
   replaceRulesText: `h2.dre,h4.dre\nh2.ure,h4.ure`,
   markdownReplaceRulesSummary:
@@ -92,7 +94,7 @@ const DEFAULT_SETTINGS: LocalDictPluginSettings = {
   simplifiedGlobalHideSelectors: "",
   simplifiedHideSelectors: ".snote\n.bc\nspan.def_text\n.vis_w\n.un_text",
   simplifiedShowInHiddenSelectors:
-    ".uro_def>.mw_zh\n.un_text>.mw_zh\n.vis_w>.wm_zh\n.snote>.wm_zh",
+    ".uro_def,.mw_zh\n.un_text,.mw_zh\n.vis_w,.wm_zh\n.snote,.wm_zh",
   history: [],
   maxHistory: 500,
   currentHistoryIndex: -1,
@@ -108,6 +110,9 @@ export default class LocalDictPlugin extends Plugin {
   view: WordView | null = null;
   settings!: LocalDictPluginSettings;
 
+  getCurrentWord(): string | null {
+    return this.view?.currentWord || "";
+  }
   async loadSettings() {
     //  this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     const raw = await this.loadData();
@@ -229,13 +234,15 @@ export default class LocalDictPlugin extends Plugin {
         }
 
         const path = this.settings.contextMenuLogPath?.trim();
+
         if (!path) {
           new Notice("Collection file path not set");
           return;
+        } else {   //todo 
+          const resolved = renderTemplate(path, { word: this.getCurrentWord()?? "", });
+          await appendToFile(this.app, resolved, text + "\n");
+          new Notice(`已追加内容到： ${resolved}`);
         }
-        const resolved = moment().format(path);
-        await appendToFile(this.app, resolved, text + "\n");
-        new Notice(`Appended to ${resolved}`);
       },
     });
 
@@ -277,7 +284,7 @@ export default class LocalDictPlugin extends Plugin {
         }
       },
     });
-    
+
     this.addCommand({
       id: "insert-copy-all-at-cursor",
       name: "📘 Local Dict: Insert Copied All Content at Cursor (Right Click)",
@@ -290,7 +297,7 @@ export default class LocalDictPlugin extends Plugin {
       callback: () => this.view?.handleInsertCopySummaryToCursor?.(),
     });
 
-    //  mark 双击触发。单词的输入点 
+    //  mark 双击触发。单词的输入点
     this.registerDomEvent(document.body, "dblclick", (evt: MouseEvent) => {
       if (!this.isViewActive()) return; // ✅ 新增：屏蔽未激活时的双击
 
@@ -371,7 +378,6 @@ export default class LocalDictPlugin extends Plugin {
       const base = baseRaw.trim().replace(/ /g, "%20"); // 替换所有空格为 %20
       const queryUrl = base.replace("{word}", encodeURIComponent(word));
 
-      
       const res = await fetch(queryUrl);
       const html = await res.text();
       // console.log("[LocalDict] 查询结果：", html.split("\n"));
@@ -384,6 +390,7 @@ export default class LocalDictPlugin extends Plugin {
       const pathParts = url.pathname.split("/"); // 得到 ["", "api", "query", "WM"]
       // 提取 "api" 和 "query"
       const query = `${pathParts[1]}/${pathParts[2]}`;
+      const queryGP = `${pathParts[1]}/${pathParts[2]}/${pathParts[3]}`;
       const firstLine = html.split("\n")[0].trim(); //"<p>Entry noncount not found. Suggestions:</p>"
 
       // 未找到词条且不含有内部链接
@@ -415,28 +422,8 @@ export default class LocalDictPlugin extends Plugin {
       injectGoldenDictLinkAllAsBlock(doc);
 
       // ✅ 替换查询链接为粗体 strong 标签（不再绑定事件，这部分保留用于结构替换）
-      doc.querySelectorAll("a[href^='/api/query/WM/']").forEach((el) => {
-        const a = el as HTMLAnchorElement;
-        const hrefRaw = a.getAttribute("href");
-        if (!hrefRaw) return;
+      replaceInternalLinks(doc, this.settings.apiBaseUrl);
 
-        const href = hrefRaw.split("#")[0];
-        if (!href) return;
-
-        const match = href.match(/\/api\/query\/WM\/(.+)$/);
-        if (!match) return;
-
-        const word = decodeURIComponent(match[1]).trim();
-        if (!word) return;
-
-        const strong = doc.createElement("strong");
-        strong.textContent = word;
-        strong.style.cursor = "pointer";
-        strong.style.color = "#3a6df0";
-        strong.classList.add("local-dict-word-link");
-
-        a.replaceWith(strong); // 替换 <a> 元素为 <strong>
-      });
 
       // ✅ 准备包裹元素
       const wrap = document.createElement("div");
@@ -572,7 +559,7 @@ class WordView extends ItemView {
   historyContainer!: HTMLElement;
   resultContainer!: HTMLDivElement;
 
-  currentWord = "";
+  public currentWord = "";
   rawHTML = "";
   simplified = false;
   plugin: LocalDictPlugin;
@@ -800,6 +787,7 @@ class WordView extends ItemView {
           .setIcon("lucide-search-check")
           .onClick(() => {
             this.plugin.queryWord(selectedText, 0, true);
+            this.inputEl.textContent = this.currentWord;
           })
       );
 
@@ -821,7 +809,7 @@ class WordView extends ItemView {
           .onClick(async () => {
             const success = await insertAtCursor(this.plugin.app, selectedText);
             if (!success) {
-              new Notice("插入失败：未检测到 Markdown 编辑器");
+              new Notice("插入失败：未检测到活动 Markdown 编辑器");
             }
           });
       });
@@ -836,9 +824,10 @@ class WordView extends ItemView {
               new Notice("未设置收集文件路径");
               return;
             }
-            const resolved = moment().format(path);
+          const resolved = renderTemplate(path, {word: this.currentWord ?? ""});
+
             await appendToFile(this.plugin.app, resolved, selectedText + "\n");
-            new Notice(`已添加到：${resolved}`);
+            new Notice(`已追加内容到：：${resolved}`);
           });
       });
 
@@ -1171,10 +1160,14 @@ class WordView extends ItemView {
       return;
     }
     if (this.currentWord) {
-      const resolved = moment().format(path);
+      // const resolved = moment().format(path);
+          const resolved = renderTemplate(path, {
+            word: this.currentWord ?? "",
+          });
+
       await appendToFile(this.plugin.app, resolved, md + "\n");
     } else {
-      // new Notice("请先查询单词");
+      new Notice("请先查询单词");
     }
   }
 
@@ -1186,10 +1179,14 @@ class WordView extends ItemView {
       return;
     }
     if (this.currentWord) {
-      const resolved = moment().format(path);
+      // const resolved = moment().format(path);
+          const resolved = renderTemplate(path, {
+            word: this.currentWord ?? "",
+          });
+
       await appendToFile(this.plugin.app, resolved, md + "\n");
     } else {
-      // new Notice("请先查询单词");
+      new Notice("请先查询单词");
     }
   }
 
@@ -1352,14 +1349,14 @@ class LocalDictSettingTab extends PluginSettingTab {
     new Setting(containerEl).setDesc(
       buildMultilineDesc([
         "若填写路径，则每次点击时会将相应的内容时添加到相应此文件。若为空则不收集。",
-        "支持 moment 格式化字符串。不想被格式化的字符串请使用[和]包围，支持多个[]对。",
-        "最好提供带有文件后缀名的全路径字符串，防止出错。",
-        "[daily]/YYYYMMDD[.md] 指向 daily/20250511",
+        "支持 moment 格式化字符串。",
+        "`Collected/{{YYYY-MM-DD}}.md` ➜ 将内容追加到在 Collected 文件夹中的当天日期文件中。",
+        "`Collected/{{word}}.md` ➜ 在 Collected 文件夹中生成以当前单词为文件名的笔记。",
       ])
     );
 
     new Setting(containerEl)
-      .setName("收集*复制全部*输出的文件路径")
+      .setName("收集*复制全部*输出内容的文件路径")
       .setDesc("")
       .addText((text) => {
         text
@@ -1372,7 +1369,7 @@ class LocalDictSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("收集*复制简略*输出的文件路径")
+      .setName("收集*复制简略*输出内容的文件路径")
       .setDesc("")
       .addText((text) => {
         text
@@ -1385,7 +1382,7 @@ class LocalDictSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("词典显示区右键：收集文件路径")
+      .setName("词典显示区右键中收集文件的路径")
       .setDesc("")
       .addText((text) => {
         text
@@ -1399,9 +1396,10 @@ class LocalDictSettingTab extends PluginSettingTab {
 
     containerEl.createEl("h4", { text: "词典显示设置" });
     containerEl.createEl("p", {
-      text: "词典显示时先按照下面的元素替换规则进行替换，生成初始版本词典内容。",
+      text: "词典显示时先按照下面的元素替换规则进行替换，得到初始版本词典内容。",
     });
-    containerEl.createEl("p", { text: "之后在显示时按照隐藏规则进行显示。" });
+    containerEl.createEl("p", { text: "之后在显示时按照下方的隐藏规则进行显示。" });
+    containerEl.createEl("p", { text: "本节中所提及的选择器为有效的 CSS 选择器即可。" });
 
     // 标签替换规则说明 + 设置
     new Setting(containerEl)
@@ -1440,7 +1438,7 @@ class LocalDictSettingTab extends PluginSettingTab {
 
     // 词典元素的隐藏 🔽
     new Setting(containerEl)
-      .setName("全局隐藏元素选择器")
+      .setName("全局都要隐藏的元素的选择器")
       .setDesc(
         buildMultilineDesc([
           "这些元素在显示全部和简略时都会被隐藏。",
@@ -1464,8 +1462,8 @@ class LocalDictSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("简略模式下隐藏元素选择器")
-      .setDesc("仅在简略模式下被隐藏的元素，每行一个选择器。")
+      .setName("简略模式下要隐藏的元素的选择器")
+      .setDesc("仅在简略模式下被隐藏的元素，每行一个 CSS 选择器。")
       .addTextArea((text) => {
         text
           .setValue(this.plugin.settings.simplifiedHideSelectors)
@@ -1481,20 +1479,20 @@ class LocalDictSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("简略模式保留显示的子元素选择器")
+      .setName("简略模式下仍然保持显示的隐藏元素的子元素选择器")
       .setDesc(
         buildMultilineDesc([
           "从被隐藏的元素中恢复显示特定子元素。",
-          "格式：每行一个规则，，使用`>`连接。例如：",
-          "1. `.entry > .ure` 表示保留 `.entry` 内的 `.ure` 元素",
-          "2. `.example > span.note` 表示保留 `.example` 中的 `span.note`",
+          "格式：每行一个规则，，使用`,`连接。例如：",
+          "1. `.entry, .ure` 表示保留 `.entry` 内的 `.ure` 元素",
+          "2. `.example, span.note` 表示保留 `.example` 中的 `span.note`",
           "3. `.highlight` 表示同时为父子选择器，保留该类元素",
         ])
       )
       .addTextArea((text) => {
         text
           .setPlaceholder(
-            `示例：\n.entry > .ure\n.example > span.note\n.highlight`
+            `示例：\n.entry，.ure\n.example, span.note\n.highlight`
           )
           .setValue(this.plugin.settings.simplifiedShowInHiddenSelectors)
           .onChange(async (value) => {
