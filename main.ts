@@ -208,8 +208,8 @@ export default class LocalDictPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "insert-last-selected-text",
-      name: "📘 Local Dict: Insert Last Selected Text at Cursor",
+      id: "insert-selected-text",
+      name: "📘 Local Dict: Insert Selected Text at Cursor",
       callback: async () => {
         const text = this.lastSelectedText?.trim();
         if (!text) {
@@ -225,8 +225,8 @@ export default class LocalDictPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "append-last-selected-text",
-      name: "📘 Local Dict: Append Last Selected Text to Collection File",
+      id: "append-selected-text",
+      name: "📘 Local Dict: Append Selected Text to Collection File",
       callback: async () => {
         const text = this.lastSelectedText?.trim();
         if (!text) {
@@ -250,8 +250,8 @@ export default class LocalDictPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "copy-last-selected-text",
-      name: "📘 Local Dict: Copy Last Selected Text to Clipboard",
+      id: "copy-selected-text",
+      name: "📘 Local Dict: Copy Selected Text to Clipboard",
       callback: async () => {
         const text = this.lastSelectedText?.trim();
         if (!text) {
@@ -277,8 +277,8 @@ export default class LocalDictPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "requery-current-word",
-      name: "🔁 Local Dict: Re-query Current Word",
+      id: "query-current-selected-word",
+      name: "📘 Local Dict: Query Current Selected Word",
       callback: () => {
         if (this.view?.currentWord) {
           this.queryWord(this.view.currentWord, 0);

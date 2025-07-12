@@ -7,7 +7,7 @@ OLD/
 # Private files for ref (e.g., files for ref that are not meant to be shared)
 **/*.p.ts      
 *.gitignore  # self
-dist/
+
 note/
 obsidian.css
 
@@ -22,7 +22,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-store/
 # Compiled output (e.g., from TypeScript, Webpack, Rollup)
-dist/         
+
 # Another common compiled output directory
 build/
 # TypeScript build info files

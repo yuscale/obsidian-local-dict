@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "build": "rollup -c",
-    "zip": "npm run build && cd dist && zip -r ../plugin.zip .",
+    "zip": "npm run build && zip \"dist/Local Dict.zip\" manifest.json main.js styles.css",
     "dev": "rollup --config rollup.config.mjs -w"
   },
   "devDependencies": {

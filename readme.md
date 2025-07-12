@@ -5,7 +5,7 @@ Created Date: 2025-07-09 08:59:39 Wednesday
 Author: Scale Yu
 E-mail: yuscale@126.com
 
-Last Modified: 2025-07-12 04:47:08 Saturday
+Last Modified: 2025-07-12 23:32:05 Saturday
 Modified By: Scale Yu
 ---
 
@@ -473,24 +473,24 @@ a b , em
 
 ## 📋 可用命令（Command Palette）
 
-| 命令 ID             | 说明（中文）<br>Description (English)                               |
-| ------------------------ | --------------------------------- |
-| `open-local-dict-view`                 | 打开本地词典右栏视图（默认无快捷键，可手动添加）<br>Open the right sidebar dictionary view (no shortcut by default, can be customized) |
-| `local-dict-toggle-view-mode`          | 切换词典显示模式（全部 / 简略）<br>Toggle view mode: Full / Simplified                                                       |
-| `local-dict-copy-all`                  | 复制当前词条的全部内容<br>Copy all content of the current entry                                                           |
-| `local-dict-copy-summary`              | 复制当前词条的简略内容<br>Copy simplified summary of the current entry                                                    |
-| `local-dict-navigate-back`             | 回到前一个历史查询词条<br>Navigate back to the previous queried word                                                      |
-| `local-dict-navigate-forward`          | 前进到下一个历史查询词条<br>Navigate forward to the next queried word                                                      |
-| `local-dict-show-history`              | 显示或隐藏浮动历史记录面板<br>Toggle floating history record panel                                                          |
-| `local-dict-export-history`            | 导出历史查询记录为 Markdown<br>Export query history as Markdown                                                         |
-| `local-dict-clear-history`             | 清空历史记录（需确认）<br>Clear all history records (confirmation required)                                               |
-| `copy-all-to-clipboard-and-append`     | 复制全部并追加到收集文件（对应按钮的双击）<br>Copy all and append to collection file (double-click button)                          |
-| `copy-summary-to-clipboard-and-append` | 复制简略并追加到收集文件（对应按钮的双击）<br>Copy summary and append to collection file (double-click button)                      |
-| `insert-copy-all-to-cursor`            | 将“复制全部”内容插入当前光标位置（对应按钮右键）<br>Insert "copy all" content at current cursor (right-click button)                  |
-| `insert-copy-summary-to-cursor`        | 将“复制简略”内容插入当前光标位置（对应按钮右键）<br>Insert "copy summary" content at current cursor (right-click button)              |
-| `requery-current-word` | 查询当前所选词汇（右键菜单）br/>Query the current selected word |
-| `insert-selection-to-cursor`           | 将词典中选中的文本插入当前光标处（右键菜单）<br>Insert selected text from dictionary at cursor (context menu)                        |
-| `append-selection-to-collection`       | 将词典中选中的文本追加到收集文件（右键菜单）<br>Append selected dictionary text to collection file (context menu)                    |
+| 序号     | 命令名称                                                              | 说明                       |
+| ------ | ----------------------------------------------------------------- | ------------------------ |
+| 1️⃣    | Open Local Dict Viewer                                            | 打开右栏词典视图                 |
+| 2️⃣    | 📘 Local Dict: Copy All to Clipboard                              | 复制当前词条的全部内容              |
+| 3️⃣    | 📘 Local Dict: Copy Summary to Clipboard                          | 复制当前词条的简略内容              |
+| 4️⃣    | 📘 Local Dict: Copy All and Append to Log File (Double Click)     | 复制全部并追加到收集文件（按钮双击）       |
+| 5️⃣    | 📘 Local Dict: Copy Summary and Append to Log File (Double Click) | 复制简略并追加到收集文件（按钮双击）       |
+| 6️⃣    | 📘 Local Dict: Insert Copied All Content at Cursor (Right Click)  | 将“复制全部”内容插入到当前光标位置（按钮右键） |
+| 7️⃣    | 📘 Local Dict: Insert Copied Summary at Cursor (Right Click)      | 将“复制简略”内容插入到当前光标位置（按钮右键） |
+| 8️⃣    | 📘 Local Dict: Toggle Simplified View                             | 切换显示模式（简略/全部）            |
+| 9️⃣    | 📘 Local Dict: Navigate Back                                      | 回到前一个历史查询词条              |
+| 🔟    | 📘 Local Dict: Toggle History Panel                               | 显示或隐藏浮动历史记录面板            |
+| 1️⃣1️⃣ | 📘 Local Dict: Navigate Forward                                   | 前进到下一个历史查询词条             |
+| 1️⃣2️⃣ | 📘 Local Dict: Copy Selected Text to Clipboard                    | （词典区域右键）复制最近选中的文本          |
+| 1️⃣3️⃣ | 📘 Local Dict: Query Current Selected Word                        | （词典区域右键）重新查询当前显示的词汇              |
+| 1️⃣4️⃣ | 📘 Local Dict: Insert Selected Text at Cursor                     | （词典区域右键）将最近选中文本插入当前光标位置          |
+| 1️⃣5️⃣ | 📘 Local Dict: Append Selected Text to Collection File            | （词典区域右键）将最近选中文本追加到收集文件           |
+
 
 
 > 💡 默认无快捷键，建议在「设置 → 快捷键」中绑定常用功能。

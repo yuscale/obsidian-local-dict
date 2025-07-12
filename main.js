@@ -6650,6 +6650,7 @@ function requireMoment () {
 var momentExports = requireMoment();
 var moment = /*@__PURE__*/getDefaultExportFromCjs(momentExports);
 
+// 这里有好多过程中的旧版本 函数，也没删除，就在这放着了，也没啥影响
 const turndownService = new TurndownService({ headingStyle: "atx" });
 /**
  * 渲染模板字符串，支持 {{word}} 变量 和 moment 格式化，如 {{YYYY-MM-DD}}。
@@ -7274,8 +7275,8 @@ class LocalDictPlugin extends obsidian.Plugin {
             },
         });
         this.addCommand({
-            id: "insert-last-selected-text",
-            name: "📘 Local Dict: Insert Last Selected Text at Cursor",
+            id: "insert-selected-text",
+            name: "📘 Local Dict: Insert Selected Text at Cursor",
             callback: async () => {
                 const text = this.lastSelectedText?.trim();
                 if (!text) {
@@ -7289,8 +7290,8 @@ class LocalDictPlugin extends obsidian.Plugin {
             },
         });
         this.addCommand({
-            id: "append-last-selected-text",
-            name: "📘 Local Dict: Append Last Selected Text to Collection File",
+            id: "append-selected-text",
+            name: "📘 Local Dict: Append Selected Text to Collection File",
             callback: async () => {
                 const text = this.lastSelectedText?.trim();
                 if (!text) {
@@ -7312,8 +7313,8 @@ class LocalDictPlugin extends obsidian.Plugin {
             },
         });
         this.addCommand({
-            id: "copy-last-selected-text",
-            name: "📘 Local Dict: Copy Last Selected Text to Clipboard",
+            id: "copy-selected-text",
+            name: "📘 Local Dict: Copy Selected Text to Clipboard",
             callback: async () => {
                 const text = this.lastSelectedText?.trim();
                 if (!text) {
@@ -7335,8 +7336,8 @@ class LocalDictPlugin extends obsidian.Plugin {
             callback: () => this.view?.handleCopySummaryToFile?.(),
         });
         this.addCommand({
-            id: "requery-current-word",
-            name: "🔁 Local Dict: Re-query Current Word",
+            id: "query-current-selected-word",
+            name: "📘 Local Dict: Query Current Selected Word",
             callback: () => {
                 if (this.view?.currentWord) {
                     this.queryWord(this.view.currentWord, 0);
