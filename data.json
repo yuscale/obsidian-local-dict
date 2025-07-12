@@ -14,44 +14,16 @@
   "simplifiedShowInHiddenSelectors": ".un_text,.mw_zh\n.uro .vis_w, .vis",
   "history": [
     {
-      "word": "obsidian",
-      "time": "20250712 025338"
-    },
-    {
-      "word": "highlight",
-      "time": "20250712 035654"
-    },
-    {
-      "word": "Usage",
-      "time": "20250712 040025"
-    },
-    {
-      "word": "proprietary",
-      "time": "20250712 040451"
-    },
-    {
-      "word": "markdown",
-      "time": "20250712 040500"
-    },
-    {
-      "word": "application",
-      "time": "20250712 040502"
-    },
-    {
-      "word": "natural",
-      "time": "20250712 041321"
+      "word": "glass",
+      "time": "20250713 001849"
     },
     {
       "word": "Obsidian",
-      "time": "20250712 041324"
-    },
-    {
-      "word": "lava",
-      "time": "20250712 041326"
+      "time": "20250713 002438"
     }
   ],
   "maxHistory": 500,
-  "currentHistoryIndex": 8,
+  "currentHistoryIndex": 1,
   "copyAllLogPath": "all.md",
   "copySummaryLogPath": "daily/{{YYYYMMDD}}.md",
   "contextMenuLogPath": "456.md",

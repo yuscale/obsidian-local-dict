@@ -1,7 +1,7 @@
 {
   "id": "local-dict",
   "name": "Local Dictionary",
-  "version": "0.22.1",
+  "version": "0.22.2",
   "minAppVersion": "0.15.0",
   "description": "Lookup words locally and display meaning in right sidebar", 
   "author": "Scale Yu",

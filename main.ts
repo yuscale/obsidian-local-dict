@@ -305,31 +305,29 @@ export default class LocalDictPlugin extends Plugin {
       document.body,
       "dblclick",
       async (evt: MouseEvent) => {
-        
         const selection = window.getSelection();
         if (!selection || selection.isCollapsed) return;
         if (!(evt.target as HTMLElement).closest(".cm-content")) return;
 
         const word = selection
-        .toString()
-        .replace(/[,*()#@!^$&*()\[\]{}，。；“”‘’！~～_]/g, " ") //去除没用的符号
+          .toString()
+          .replace(/[,*()#@!^$&*()\[\]{}，。；“”‘’！~～_]/g, " ") //去除没用的符号
           .trim();
         // if (word) this.queryWord(word, 0, true);
-        
+
         if (evt.ctrlKey) {
-          console.log("ctrl key pressed ")
+          // console.log("ctrl key pressed ");
           await this.activateLocalDictView(); // ⬅️ 展开右栏
           // this.switchToLocalDictTab(); // ⬅️ 切换标签
           this.queryWord(word, 0, true); // ⬅️ 查词
         } else {
-          console.log("no ctrl key pressed ")
+          // console.log("no ctrl key pressed ");
           if (!this.isViewActive()) return; // ✅ 新增：屏蔽未激活时的双击
           this.queryWord(word, 0, true);
         }
       }
     );
   }
-
 
   async saveSettings() {
     await this.saveData(this.settings);
@@ -365,36 +363,35 @@ export default class LocalDictPlugin extends Plugin {
     }
   }
 
-async activateLocalDictView() {
-  const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_WORD);
-  if (leaves.length > 0) {
-    // 已经存在，直接激活
-    await this.app.workspace.revealLeaf(leaves[0]);
-    this.view = leaves[0].view as WordView;
-    return;
+  async activateLocalDictView() {
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_WORD);
+    if (leaves.length > 0) {
+      // 已经存在，直接激活
+      await this.app.workspace.revealLeaf(leaves[0]);
+      this.view = leaves[0].view as WordView;
+      return;
+    }
+
+    // 获取或创建右侧栏 leaf
+    const leaf = this.app.workspace.getRightLeaf(true); // ← 用 true 保证一定能获取到
+    if (!leaf) {
+      console.warn("无法获取右侧栏 leaf");
+      return;
+    }
+
+    // 设置 viewState，显示你的视图
+    await leaf.setViewState({
+      type: VIEW_TYPE_WORD,
+      active: true,
+    });
+
+    // 激活它
+    await this.app.workspace.revealLeaf(leaf);
+
+    // 获取视图实例
+    this.view = leaf.view instanceof WordView ? leaf.view : null;
+    console.log("展开右栏");
   }
-
-  // 获取或创建右侧栏 leaf
-  const leaf = this.app.workspace.getRightLeaf(true); // ← 用 true 保证一定能获取到
-  if (!leaf) {
-    console.warn("无法获取右侧栏 leaf");
-    return;
-  }
-
-  // 设置 viewState，显示你的视图
-  await leaf.setViewState({
-    type: VIEW_TYPE_WORD,
-    active: true,
-  });
-
-  // 激活它
-  await this.app.workspace.revealLeaf(leaf);
-
-  // 获取视图实例
-  this.view = leaf.view instanceof WordView ? leaf.view : null;
-  console.log("展开右栏")
-}
-
 
   async queryWord(word: string, depth = 0, record = true) {
     // 开始查询时可设定 loading UI
@@ -523,19 +520,25 @@ async activateLocalDictView() {
   }
 
   /** 更新历史：去重＋附带时间戳 */
+
+  /** 更新历史：去重＋附带时间戳（忽略大小写） */
   async updateHistory(word: string, updateIndex = true) {
     if (!word) return;
     const trimmed = word.trim();
     if (!trimmed) return;
 
-    // 如果当前已经是这个词，就跳过
+    const trimmedLower = trimmed.toLowerCase(); // ← 统一小写比较
+
+    // 如果当前已经是这个词（忽略大小写）就跳过
     if (
       this.settings.history.length > 0 &&
-      this.settings.history[this.settings.history.length - 1].word === trimmed
+      this.settings.history[
+        this.settings.history.length - 1
+      ].word.toLowerCase() === trimmedLower
     )
       return;
 
-    // 👉 如果当前不是最后一个词，说明用户后退了再查新词，应当清除“前进”记录
+    // 如果当前不是最后一个词，说明用户后退了再查新词，应当清除“前进”记录
     if (this.settings.currentHistoryIndex < this.settings.history.length - 1) {
       this.settings.history = this.settings.history.slice(
         0,
@@ -543,38 +546,35 @@ async activateLocalDictView() {
       );
     }
 
-    // ✅ 格式化时间为 "20250703 120303"
+    // 格式化时间为 "YYYYMMDD HHMMSS"
     const now = new Date();
-    const formatNumber = (n: number) => n.toString().padStart(2, "0");
+    const pad = (n: number) => n.toString().padStart(2, "0");
     const formattedTime =
-      `${now.getFullYear()}${formatNumber(now.getMonth() + 1)}${formatNumber(
-        now.getDate()
-      )} ` +
-      `${formatNumber(now.getHours())}${formatNumber(
-        now.getMinutes()
-      )}${formatNumber(now.getSeconds())}`;
+      `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())} ` +
+      `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 
-    // 删除已有的相同词项（避免重复）
+    // 删除已有的相同词项（忽略大小写，避免重复）
     this.settings.history = this.settings.history.filter(
-      (h) => h.word !== trimmed
+      (h) => h.word.toLowerCase() !== trimmedLower
     );
 
-    // ✅ 添加新项
+    // 添加新项
     this.settings.history.push({ word: trimmed, time: formattedTime });
 
-    // ✅ 限制最大数量
+    // 限制最大数量
     const max = Math.min(this.settings.maxHistory ?? 500, 500);
     if (this.settings.history.length > max) {
       this.settings.history.splice(0, this.settings.history.length - max); // 删除多余最旧的
     }
 
-    // ✅ 更新当前索引
+    // 更新当前索引
     if (updateIndex) {
       this.settings.currentHistoryIndex = this.settings.history.length - 1;
     }
 
     await this.saveSettings();
   }
+ 
 }
 
 class WordView extends ItemView {

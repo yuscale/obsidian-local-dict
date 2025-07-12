@@ -7370,13 +7370,13 @@ class LocalDictPlugin extends obsidian.Plugin {
                 .trim();
             // if (word) this.queryWord(word, 0, true);
             if (evt.ctrlKey) {
-                console.log("ctrl key pressed ");
+                // console.log("ctrl key pressed ");
                 await this.activateLocalDictView(); // ⬅️ 展开右栏
                 // this.switchToLocalDictTab(); // ⬅️ 切换标签
                 this.queryWord(word, 0, true); // ⬅️ 查词
             }
             else {
-                console.log("no ctrl key pressed ");
+                // console.log("no ctrl key pressed ");
                 if (!this.isViewActive())
                     return; // ✅ 新增：屏蔽未激活时的双击
                 this.queryWord(word, 0, true);
@@ -7543,35 +7543,37 @@ class LocalDictPlugin extends obsidian.Plugin {
         });
     }
     /** 更新历史：去重＋附带时间戳 */
+    /** 更新历史：去重＋附带时间戳（忽略大小写） */
     async updateHistory(word, updateIndex = true) {
         if (!word)
             return;
         const trimmed = word.trim();
         if (!trimmed)
             return;
-        // 如果当前已经是这个词，就跳过
+        const trimmedLower = trimmed.toLowerCase(); // ← 统一小写比较
+        // 如果当前已经是这个词（忽略大小写）就跳过
         if (this.settings.history.length > 0 &&
-            this.settings.history[this.settings.history.length - 1].word === trimmed)
+            this.settings.history[this.settings.history.length - 1].word.toLowerCase() === trimmedLower)
             return;
-        // 👉 如果当前不是最后一个词，说明用户后退了再查新词，应当清除“前进”记录
+        // 如果当前不是最后一个词，说明用户后退了再查新词，应当清除“前进”记录
         if (this.settings.currentHistoryIndex < this.settings.history.length - 1) {
             this.settings.history = this.settings.history.slice(0, this.settings.currentHistoryIndex + 1);
         }
-        // ✅ 格式化时间为 "20250703 120303"
+        // 格式化时间为 "YYYYMMDD HHMMSS"
         const now = new Date();
-        const formatNumber = (n) => n.toString().padStart(2, "0");
-        const formattedTime = `${now.getFullYear()}${formatNumber(now.getMonth() + 1)}${formatNumber(now.getDate())} ` +
-            `${formatNumber(now.getHours())}${formatNumber(now.getMinutes())}${formatNumber(now.getSeconds())}`;
-        // 删除已有的相同词项（避免重复）
-        this.settings.history = this.settings.history.filter((h) => h.word !== trimmed);
-        // ✅ 添加新项
+        const pad = (n) => n.toString().padStart(2, "0");
+        const formattedTime = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())} ` +
+            `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        // 删除已有的相同词项（忽略大小写，避免重复）
+        this.settings.history = this.settings.history.filter((h) => h.word.toLowerCase() !== trimmedLower);
+        // 添加新项
         this.settings.history.push({ word: trimmed, time: formattedTime });
-        // ✅ 限制最大数量
+        // 限制最大数量
         const max = Math.min(this.settings.maxHistory ?? 500, 500);
         if (this.settings.history.length > max) {
             this.settings.history.splice(0, this.settings.history.length - max); // 删除多余最旧的
         }
-        // ✅ 更新当前索引
+        // 更新当前索引
         if (updateIndex) {
             this.settings.currentHistoryIndex = this.settings.history.length - 1;
         }
