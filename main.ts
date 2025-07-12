@@ -16,7 +16,6 @@ import {
 const { exec } = require("child_process");
 import moment from "moment";
 
-
 import {
   insertAtCursor,
   replaceInternalLinks,
@@ -28,7 +27,8 @@ import {
   htmlToMarkdownFiltered,
   injectGoldenDictLinkAllAsBlock,
   parseMarkdownReplaceRules,
-  parseReplaceRules,bindClickAndDoubleClick,
+  parseReplaceRules,
+  bindClickAndDoubleClick,
   postProcessMarkdown,
   postProcessMarkdownCopyAll,
   postProcessMarkdownCopySummary,
@@ -94,8 +94,7 @@ const DEFAULT_SETTINGS: LocalDictPluginSettings = {
   simplifiedGlobalHideSelectors: "",
   simplifiedHideSelectors:
     ".bc\n.def_text\n.sd\n//例句\n.vis_w\n.un_text\n//名词 noncount\n.sense .sgram\n.sense .wsgram\n// 派生词\n.uro_line .gram\n",
-  simplifiedShowInHiddenSelectors:
-    ".un_text,.mw_zh\n.uro .vis_w, .vis",
+  simplifiedShowInHiddenSelectors: ".un_text,.mw_zh\n.uro .vis_w, .vis",
   history: [],
   maxHistory: 500,
   currentHistoryIndex: -1,
@@ -114,6 +113,7 @@ export default class LocalDictPlugin extends Plugin {
   getCurrentWord(): string | null {
     return this.view?.currentWord || "";
   }
+
   async loadSettings() {
     //  this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     const raw = await this.loadData();
@@ -147,12 +147,12 @@ export default class LocalDictPlugin extends Plugin {
     // 添加设置面板
     this.addSettingTab(new LocalDictSettingTab(this.app, this));
 
-    this.app.workspace.onLayoutReady(() => this.activateView());
+    this.app.workspace.onLayoutReady(() => this.activateLocalDictView());
 
     this.addCommand({
       id: "open-local-dict-view",
       name: "Open Local Dict Viewer",
-      callback: () => this.activateView(),
+      callback: () => this.activateLocalDictView(),
     });
 
     this.addCommand({
@@ -239,8 +239,10 @@ export default class LocalDictPlugin extends Plugin {
         if (!path) {
           new Notice("Collection file path not set");
           return;
-        } else {    
-          const resolved = renderTemplate(path, { word: this.getCurrentWord()?? "", });
+        } else {
+          const resolved = renderTemplate(path, {
+            word: this.getCurrentWord() ?? "",
+          });
           await appendToFile(this.app, resolved, text + "\n");
           new Notice(`已追加内容到： ${resolved}`);
         }
@@ -299,20 +301,35 @@ export default class LocalDictPlugin extends Plugin {
     });
 
     //  mark 双击触发。单词的输入点
-    this.registerDomEvent(document.body, "dblclick", (evt: MouseEvent) => {
-      if (!this.isViewActive()) return; // ✅ 新增：屏蔽未激活时的双击
+    this.registerDomEvent(
+      document.body,
+      "dblclick",
+      async (evt: MouseEvent) => {
+        
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed) return;
+        if (!(evt.target as HTMLElement).closest(".cm-content")) return;
 
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed) return;
-      if (!(evt.target as HTMLElement).closest(".cm-content")) return;
-
-      const word = selection
+        const word = selection
         .toString()
         .replace(/[,*()#@!^$&*()\[\]{}，。；“”‘’！~～_]/g, " ") //去除没用的符号
-        .trim();
-      if (word) this.queryWord(word, 0, true);
-    });
+          .trim();
+        // if (word) this.queryWord(word, 0, true);
+        
+        if (evt.ctrlKey) {
+          console.log("ctrl key pressed ")
+          await this.activateLocalDictView(); // ⬅️ 展开右栏
+          // this.switchToLocalDictTab(); // ⬅️ 切换标签
+          this.queryWord(word, 0, true); // ⬅️ 查词
+        } else {
+          console.log("no ctrl key pressed ")
+          if (!this.isViewActive()) return; // ✅ 新增：屏蔽未激活时的双击
+          this.queryWord(word, 0, true);
+        }
+      }
+    );
   }
+
 
   async saveSettings() {
     await this.saveData(this.settings);
@@ -348,20 +365,36 @@ export default class LocalDictPlugin extends Plugin {
     }
   }
 
-  async activateView() {
-    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_WORD);
-    if (leaves.length > 0) {
-      await leaves[0].setViewState({ type: VIEW_TYPE_WORD, active: true });
-      this.view = this.app.workspace.getActiveViewOfType(WordView) ?? null;
-      return;
-    }
-
-    const leaf = this.app.workspace.getRightLeaf(false);
-    if (!leaf) return;
-
-    await leaf.setViewState({ type: VIEW_TYPE_WORD, active: true });
-    this.view = this.app.workspace.getActiveViewOfType(WordView) ?? null;
+async activateLocalDictView() {
+  const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_WORD);
+  if (leaves.length > 0) {
+    // 已经存在，直接激活
+    await this.app.workspace.revealLeaf(leaves[0]);
+    this.view = leaves[0].view as WordView;
+    return;
   }
+
+  // 获取或创建右侧栏 leaf
+  const leaf = this.app.workspace.getRightLeaf(true); // ← 用 true 保证一定能获取到
+  if (!leaf) {
+    console.warn("无法获取右侧栏 leaf");
+    return;
+  }
+
+  // 设置 viewState，显示你的视图
+  await leaf.setViewState({
+    type: VIEW_TYPE_WORD,
+    active: true,
+  });
+
+  // 激活它
+  await this.app.workspace.revealLeaf(leaf);
+
+  // 获取视图实例
+  this.view = leaf.view instanceof WordView ? leaf.view : null;
+  console.log("展开右栏")
+}
+
 
   async queryWord(word: string, depth = 0, record = true) {
     // 开始查询时可设定 loading UI
@@ -391,7 +424,6 @@ export default class LocalDictPlugin extends Plugin {
       const pathParts = url.pathname.split("/"); // 得到 ["", "api", "query", "WM"]
       // 提取 "api" 和 "query"
       const query = `${pathParts[1]}/${pathParts[2]}`;
-      const queryGP = `${pathParts[1]}/${pathParts[2]}/${pathParts[3]}`;
       const firstLine = html.split("\n")[0].trim(); //"<p>Entry noncount not found. Suggestions:</p>"
 
       // 未找到词条且不含有内部链接
@@ -424,7 +456,6 @@ export default class LocalDictPlugin extends Plugin {
 
       // ✅ 替换查询链接为粗体 strong 标签（不再绑定事件，这部分保留用于结构替换）
       replaceInternalLinks(doc, this.settings.apiBaseUrl);
-
 
       // ✅ 准备包裹元素
       const wrap = document.createElement("div");
@@ -466,12 +497,6 @@ export default class LocalDictPlugin extends Plugin {
       new Notice("查询失败：" + e);
       if (this.view?.checkServiceStatus) this.view.checkServiceStatus();
 
-      // // ✅ 清空界面并显示空白内容
-      // const empty = document.createElement("div");
-      // empty.innerHTML = `<p style="color: var(--text-muted); text-align: center; margin-top: 1em;">❌ 查询失败，可能未启动词典服务</p>`;
-      // // this.view?.setContent(empty, word); // 👈 传入当前单词以保留上下文
-      // // ✅ 显示空界面，避免历史记录错位渲染到 searchbar
-      // this.view?.setContent("", "");
       // ✅ 显示空结果（确保结果容器不为空）
       const error = document.createElement("div");
       error.textContent = "查询失败：" + (e as Error).message;
@@ -576,14 +601,12 @@ class WordView extends ItemView {
     this.plugin = plugin;
   }
 
-
-
   getViewType() {
     return VIEW_TYPE_WORD;
   }
 
   getDisplayText() {
-    return "本地词典";
+    return "Local Dict Viewer";
   }
 
   getIcon() {
@@ -672,7 +695,7 @@ class WordView extends ItemView {
       copyAll,
       this.plugin,
       () => this.copyAll(), // 单击复制到剪贴板
-      () => this.handleCopyAllToFile(), // 双击保存到文件（如果启用）
+      () => this.handleCopyAllToFile() // 双击保存到文件（如果启用）
     );
 
     bindClickAndDoubleClickWithSetting(
@@ -751,7 +774,6 @@ class WordView extends ItemView {
       placeholder: "输入单词",
     });
 
-
     this.searchBtn = searchBar.createEl("button", { text: "搜索" });
 
     const doSearch = () => {
@@ -826,7 +848,9 @@ class WordView extends ItemView {
               new Notice("未设置收集文件路径");
               return;
             }
-          const resolved = renderTemplate(path, {word: this.currentWord ?? ""});
+            const resolved = renderTemplate(path, {
+              word: this.currentWord ?? "",
+            });
 
             await appendToFile(this.plugin.app, resolved, selectedText + "\n");
             new Notice(`已追加内容到：：${resolved}`);
@@ -1013,10 +1037,10 @@ class WordView extends ItemView {
     this.contentEl.scrollTo({ top: 0, behavior: "auto" });
 
     // 最后更新输入框内文字
-    console.log("Here is the current word: "+this.currentWord);
+    // console.log("Here is the current word: " + this.currentWord);
     // this.inputEl.setText(this.currentWord);
     // this.inputEl.setAttr("text", this.currentWord);
-    this.inputEl.value= this.currentWord
+    this.inputEl.value = this.currentWord;
   }
 
   //   toggleSimplified() {
@@ -1164,14 +1188,14 @@ class WordView extends ItemView {
     const md = await this.copyAll(true); // 返回 markdown 内容
     const path = this.plugin.settings.copyAllLogPath?.trim();
     if (!path) {
-      new Notice("未设置复制全部的插入文件路径");
+      new Notice("未设置复制全部的保存文件路径");
       return;
     }
     if (this.currentWord) {
       // const resolved = moment().format(path);
-          const resolved = renderTemplate(path, {
-            word: this.currentWord ?? "",
-          });
+      const resolved = renderTemplate(path, {
+        word: this.currentWord ?? "",
+      });
 
       await appendToFile(this.plugin.app, resolved, md + "\n");
     } else {
@@ -1183,14 +1207,14 @@ class WordView extends ItemView {
     const md = await this.copySummary(true); // 返回 markdown 内容
     const path = this.plugin.settings.copySummaryLogPath?.trim();
     if (!path) {
-      new Notice("未设置复制简略的插入文件路径");
+      new Notice("未设置复制简略的保存文件路径");
       return;
     }
     if (this.currentWord) {
       // const resolved = moment().format(path);
-          const resolved = renderTemplate(path, {
-            word: this.currentWord ?? "",
-          });
+      const resolved = renderTemplate(path, {
+        word: this.currentWord ?? "",
+      });
 
       await appendToFile(this.plugin.app, resolved, md + "\n");
     } else {
@@ -1218,10 +1242,10 @@ class WordView extends ItemView {
 }
 
 // import { PluginSettingTab, Setting } from "obsidian";
-  // v这会提取出所有值是 string 的 key。
+// v这会提取出所有值是 string 的 key。
 type StringKeys<T> = {
-    [K in keyof T]: T[K] extends string ? K : never;
-    }[keyof T];
+  [K in keyof T]: T[K] extends string ? K : never;
+}[keyof T];
 
 class LocalDictSettingTab extends PluginSettingTab {
   plugin: LocalDictPlugin;
@@ -1230,8 +1254,6 @@ class LocalDictSettingTab extends PluginSettingTab {
     super(app, plugin);
     this.plugin = plugin;
   }
-
-
 
   display(): void {
     const { containerEl } = this;
@@ -1287,52 +1309,46 @@ class LocalDictSettingTab extends PluginSettingTab {
           })
       );
 
-      new Setting(containerEl)
-        .setName("词典服务查询 URL")
-        .setDesc(
-          buildMultilineDesc([
-            "本地查询接口 API 的 URL，`{word}` 为要查寻的单词。",
-            "例如：http://localhost:2628/api/query/Default Group/{word}",
-            "现确认在浏览器内能正常使用。",
-          ])
-        )
-        .addText((text) => {
-          text
-            .setPlaceholder("API 基础 URL")
-            .setValue(this.plugin.settings.apiBaseUrl)
-            .onChange(async (value) => {
-              let cleaned = value.trim();
-              if (cleaned.endsWith("/")) {
-                cleaned = cleaned.slice(0, -1);
-              }
-
-              // ⚠️ 不进行 encodeURI，以保留 {word} 原样
-              this.plugin.settings.apiBaseUrl = cleaned;
-              await this.plugin.saveData(this.plugin.settings);
-            });
-
-          // 在失去焦点时进行简单校验和提醒
-          text.inputEl.addEventListener("blur", () => {
-            const url = text.inputEl.value;
-            if (!url.includes("{word}")) {
-              new Notice("URL 中缺少 {word} 占位符，查询将失败");
-              return;
+    new Setting(containerEl)
+      .setName("词典服务查询 URL")
+      .setDesc(
+        buildMultilineDesc([
+          "本地查询接口 API 的 URL，`{word}` 为要查寻的单词。",
+          "例如：http://localhost:2628/api/query/Default Group/{word}",
+          "现确认在浏览器内能正常使用。",
+        ])
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder("API 基础 URL")
+          .setValue(this.plugin.settings.apiBaseUrl)
+          .onChange(async (value) => {
+            let cleaned = value.trim();
+            if (cleaned.endsWith("/")) {
+              cleaned = cleaned.slice(0, -1);
             }
-            try {
-              // 临时将 {word} 替换为 example 进行测试
-              new URL(url.replace("{word}", "example"));
-              // OK
-            } catch (e) {
-              new Notice("无效的 API URL，请检查格式是否正确");
-            }
+
+            // ⚠️ 不进行 encodeURI，以保留 {word} 原样
+            this.plugin.settings.apiBaseUrl = cleaned;
+            await this.plugin.saveData(this.plugin.settings);
           });
+
+        // 在失去焦点时进行简单校验和提醒
+        text.inputEl.addEventListener("blur", () => {
+          const url = text.inputEl.value;
+          if (!url.includes("{word}")) {
+            new Notice("URL 中缺少 {word} 占位符，查询将失败");
+            return;
+          }
+          try {
+            // 临时将 {word} 替换为 example 进行测试
+            new URL(url.replace("{word}", "example"));
+            // OK
+          } catch (e) {
+            new Notice("无效的 API URL，请检查格式是否正确");
+          }
         });
-    
-
-
-
-
-
+      });
 
     containerEl.createEl("h4", { text: "双击识别时间间隔" });
 
@@ -1406,8 +1422,12 @@ class LocalDictSettingTab extends PluginSettingTab {
     containerEl.createEl("p", {
       text: "词典显示时先按照下面的元素替换规则进行替换，得到初始版本词典内容。",
     });
-    containerEl.createEl("p", { text: "之后在显示时按照下方的隐藏规则进行显示。" });
-    containerEl.createEl("p", { text: "本节中所提及的选择器为有效的 CSS 选择器即可。" });
+    containerEl.createEl("p", {
+      text: "之后在显示时按照下方的隐藏规则进行显示。",
+    });
+    containerEl.createEl("p", {
+      text: "本节中所提及的选择器为有效的 CSS 选择器即可。",
+    });
 
     // 标签替换规则说明 + 设置
     new Setting(containerEl)
@@ -1742,4 +1762,3 @@ class LocalDictSettingTab extends PluginSettingTab {
     historyBtnRow.appendChild(exportBtn);
   } //display(): void
 }
- 

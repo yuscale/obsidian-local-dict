@@ -1,14 +1,20 @@
 import TurndownService from "turndown";
 import moment from "moment";
-import { normalizePath, TFile, App, Editor,MarkdownView, Notice } from "obsidian";
-import LocalDictPlugin from "./main"
+import {
+  normalizePath,
+  TFile,
+  App,
+  Editor,
+  MarkdownView,
+  Notice,
+} from "obsidian";
+import LocalDictPlugin from "./main";
 const turndownService = new TurndownService({ headingStyle: "atx" });
 
 // 你可以使用 moment() 来动态构建文件路径，例如：
 export function resolveLogPath(template: string): string {
   return moment().format(template);
 }
-
 
 /**
  * 渲染模板字符串，支持 {{word}} 变量 和 moment 格式化，如 {{YYYY-MM-DD}}。
@@ -30,9 +36,6 @@ export function renderTemplate(
     }
   });
 }
-
-
-
 
 // 插入对应 Markdown 内容到当前活动编辑器的光标处；
 export async function insertAtCursor(app: App, text: string): Promise<boolean> {
@@ -73,7 +76,6 @@ export function insertToActiveEditor(app: App, text: string) {
   editor.replaceRange(text, cursor);
 }
 
-
 export async function appendToFile0(
   app: App,
   filePath: string,
@@ -85,17 +87,16 @@ export async function appendToFile0(
   console.log("existing:", existing);
   if (!existing) {
     // new Notice(`文件 ${path} 不存在`);
-    await app.vault.create(path, "")
+    await app.vault.create(path, "");
     new Notice(`新建 ${path} 文件`);
   }
-  
+
   if (existing instanceof TFile) {
     const old = await app.vault.read(existing);
     await app.vault.modify(existing, old + "\n" + content);
     new Notice(`已添加至 ${path} 文件`);
   }
 }
-
 
 /**
  * 将 content 追加到指定 Markdown 文件末尾。
@@ -139,8 +140,6 @@ export async function appendToFile(
     console.error(err);
   }
 }
-
-
 
 /**
  * HTML 转 Markdown
@@ -214,7 +213,6 @@ export function removeStyleTags(html: string): string {
     }
   });
 
-
   return doc.body.innerHTML;
 }
 
@@ -228,10 +226,10 @@ export function removeStyleTags(html: string): string {
 //     .trim();
 // }
 
-
-
-
-export function postProcessMarkdown(md: string, rules: [RegExp, string][]): string {
+export function postProcessMarkdown(
+  md: string,
+  rules: [RegExp, string][]
+): string {
   for (const [pattern, replacement] of rules) {
     // 输出 [pattern, replacement] 备查
     // console.log([pattern, replacement]);
@@ -240,13 +238,12 @@ export function postProcessMarkdown(md: string, rules: [RegExp, string][]): stri
   return md;
 }
 
-
 export function parseMarkdownReplaceRules0(input: string): [RegExp, string][] {
   return input
     .split("\n")
-    .map(line => line.trim())
-    .filter(line => line && !line.startsWith("//"))
-    .map(line => {
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("//"))
+    .map((line) => {
       const parts = line.split(",");
 
       // 至少要两个参数：pattern 和 replacement
@@ -267,12 +264,11 @@ export function parseMarkdownReplaceRules0(input: string): [RegExp, string][] {
     .filter((r): r is [RegExp, string] => r !== null);
 }
 
-
 export function parseMarkdownReplaceRules(input: string): [RegExp, string][] {
   const result: [RegExp, string][] = [];
 
   for (const line of input.split("\n")) {
-      // const trimmed = line.trim();
+    // const trimmed = line.trim();
     const trimmed = line;
 
     // 忽略空行和注释
@@ -289,13 +285,12 @@ export function parseMarkdownReplaceRules(input: string): [RegExp, string][] {
       let replacement = match[3] ?? "";
 
       // 处理转义字符串
-        replacement = replacement
-        .replace(/\\\\/g, "\\")  // 必须先处理反斜杠本身
+      replacement = replacement
+        .replace(/\\\\/g, "\\") // 必须先处理反斜杠本身
         .replace(/\\n/g, "\n")
         .replace(/\\t/g, "\t")
         .replace(/\\r/g, "\r")
-        .replace(/\\,/g, ",");  // 支持逗号转义（避免歧义）
-
+        .replace(/\\,/g, ","); // 支持逗号转义（避免歧义）
 
       try {
         result.push([new RegExp(pattern, flags), replacement]);
@@ -309,8 +304,6 @@ export function parseMarkdownReplaceRules(input: string): [RegExp, string][] {
 
   return result;
 }
-
-
 
 /**
  * 处理 copyAll 时的 Markdown
@@ -415,14 +408,14 @@ export function simplifyHtmlWithCss(html: string): string {
 export function parseReplaceRules(text: string): string[] {
   return text
     .split("\n")
-    .map(line => line.trim())
-    .filter(line => line.includes(","));
+    .map((line) => line.trim())
+    .filter((line) => line.includes(","));
 }
 
 /** 执行标签/类替换规则
  * 规则格式:
  *  fromStr,toStr
- *  
+ *
  * 其中fromStr和toStr可为：
  *  - tagName 如 "h2"
  *  - className 如 ".oldclass"
@@ -434,7 +427,7 @@ export function replaceTagClassByRules(
   rules: string[]
 ) {
   for (const rule of rules) {
-    let [fromStr, toStr] = rule.split(",").map(s => s.trim());
+    let [fromStr, toStr] = rule.split(",").map((s) => s.trim());
 
     // 解析 fromStr
     let fromTag: string | null = null;
@@ -454,7 +447,10 @@ export function replaceTagClassByRules(
         fromClass = null;
       } else {
         fromTag = fromStr.slice(0, dotIndex);
-        fromClass = fromStr.slice(dotIndex + 1).split(".").join(" ");
+        fromClass = fromStr
+          .slice(dotIndex + 1)
+          .split(".")
+          .join(" ");
       }
     }
 
@@ -474,7 +470,10 @@ export function replaceTagClassByRules(
         toClass = null;
       } else {
         toTag = toStr.slice(0, dotIndex);
-        toClass = toStr.slice(dotIndex + 1).split(".").join(" ");
+        toClass = toStr
+          .slice(dotIndex + 1)
+          .split(".")
+          .join(" ");
       }
     }
 
@@ -491,13 +490,13 @@ export function replaceTagClassByRules(
       selector = "*";
     }
 
-    root.querySelectorAll(selector).forEach(el => {
+    root.querySelectorAll(selector).forEach((el) => {
       // 过滤tag
       if (fromTag && el.tagName.toLowerCase() !== fromTag.toLowerCase()) return;
       // 过滤class全部匹配
       if (fromClass) {
         const classes = fromClass.split(" ");
-        if (!classes.every(c => el.classList.contains(c))) return;
+        if (!classes.every((c) => el.classList.contains(c))) return;
       }
 
       // 创建新元素
@@ -520,8 +519,6 @@ export function replaceTagClassByRules(
     });
   }
 }
-
-
 
 export function injectGoldenDictLinkAllAsBlock(doc: Document | HTMLElement) {
   const spans = doc.querySelectorAll("span.hw_txt.gfont");
@@ -567,8 +564,6 @@ export function injectGoldenDictLinkAllAsBlock(doc: Document | HTMLElement) {
   });
 }
 
-
-
 /**
  * 使用模板格式化 Markdown 输出。
  * 支持转义字符：\n, \t, \\, \,
@@ -608,7 +603,6 @@ export function formatMarkdownOutput(
   return [prefix, markdown, suffix].filter(Boolean).join("\n");
 }
 
-
 /**
  * 使用模板格式化 Markdown 输出。
  * @param word 当前查询单词
@@ -622,7 +616,7 @@ export function formatMarkdownOutput0(
   prefixTpl: string,
   suffixTpl: string
 ): string {
-  const render = (tpl: string) => 
+  const render = (tpl: string) =>
     tpl.replace(/\{\{(.*?)\}\}/g, (_, token) => {
       token = token.trim();
       if (token === "word") return word;
@@ -639,12 +633,6 @@ export function formatMarkdownOutput0(
   return [prefix, markdown, suffix].filter(Boolean).join("\n");
 }
 
-
-
-
-
-
-
 export function applySimplifiedView(
   container: HTMLElement,
   simplified: boolean,
@@ -660,23 +648,27 @@ export function applySimplifiedView(
     // applySimplifiedHide(container, settings.simplifiedHideSelectors);
     // applySimplifiedHide(container, settings.simplifiedHideSelectors, settings.simplifiedShowInHiddenSelectors);
     // applySimplifiedShowInHidden(container , settings.simplifiedShowInHiddenSelectors);
-    applySimplifiedFilter(container, settings.simplifiedHideSelectors, settings.simplifiedShowInHiddenSelectors);
+    applySimplifiedFilter(
+      container,
+      settings.simplifiedHideSelectors,
+      settings.simplifiedShowInHiddenSelectors
+    );
   }
 }
 
-
 // 始终隐藏元素
 function applyGlobalHide(container: HTMLElement, selectorsText: string) {
-  const selectors = selectorsText.split("\n").map(s => s.trim()).filter((l) => l && !l.startsWith("//")).filter(Boolean);
-  selectors.forEach(selector => {
-    container.querySelectorAll(selector).forEach(el => {
+  const selectors = selectorsText
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((l) => l && !l.startsWith("//"))
+    .filter(Boolean);
+  selectors.forEach((selector) => {
+    container.querySelectorAll(selector).forEach((el) => {
       (el as HTMLElement).style.display = "none";
     });
   });
 }
-
-
-
 
 // applySimplifiedHide;applySimplifiedShowInHidden;合二为一了
 
@@ -749,8 +741,6 @@ export function applySimplifiedFilter(
   }
 }
 
-
-
 export function replaceInternalLinks(doc: Document, apiBaseUrl: string) {
   // 提取 basePath，例如 http://localhost:2628/api/query/MW/{word} => /api/query/MW/
   const baseUrlObj = new URL(apiBaseUrl.replace("{word}", "TEMP"));
@@ -777,24 +767,19 @@ export function replaceInternalLinks(doc: Document, apiBaseUrl: string) {
   });
 }
 
-
-
-
-
-
-
 // 简略模式隐藏元素
 // mark 有了新了新版本 带有三个参数
 function applySimplifiedHide0(container: HTMLElement, selectorsText: string) {
-  const selectors = selectorsText.split("\n").map(s => s.trim()).filter(Boolean);
-  selectors.forEach(selector => {
-    container.querySelectorAll(selector).forEach(el => {
+  const selectors = selectorsText
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  selectors.forEach((selector) => {
+    container.querySelectorAll(selector).forEach((el) => {
       (el as HTMLElement).style.display = "none";
     });
   });
 }
-
-
 
 interface SimplifiedShowRule {
   parentSelector: string;
@@ -804,10 +789,12 @@ interface SimplifiedShowRule {
 function parseSimplifiedShowRules(rulesStr: string): SimplifiedShowRule[] {
   return rulesStr
     .split("\n")
-    .map(line => line.trim())
-    .filter(line => line.includes(">"))
-    .map(line => {
-      const [parentSelector, childSelector] = line.split(">").map(s => s.trim());
+    .map((line) => line.trim())
+    .filter((line) => line.includes(">"))
+    .map((line) => {
+      const [parentSelector, childSelector] = line
+        .split(">")
+        .map((s) => s.trim());
       return { parentSelector, childSelector };
     });
 }
@@ -848,8 +835,8 @@ export function applySimplifiedHide(
 
   /* ---------- 2. 解析「保留子元素规则」 ---------- */
   interface KeepRule {
-    parentSel: string;   // 父选择器
-    childSel: string;    // 子选择器（允许与父相同）
+    parentSel: string; // 父选择器
+    childSel: string; // 子选择器（允许与父相同）
   }
 
   const keepRules: KeepRule[] = showInHiddenText
@@ -857,7 +844,10 @@ export function applySimplifiedHide(
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith("//"))
     .flatMap((raw) => {
-      const segs = raw.split(">").map((s) => s.trim()).filter(Boolean);
+      const segs = raw
+        .split(">")
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (segs.length === 1) {
         // 只有一个选择器：父 == 子
         return [{ parentSel: segs[0], childSel: segs[0] }];
@@ -915,7 +905,10 @@ export function applySimplifiedShowInHidden(
     .filter((l) => l && !l.startsWith("//"));
 
   showRules.forEach((raw) => {
-    const segs = raw.split(">").map((s) => s.trim()).filter(Boolean);
+    const segs = raw
+      .split(">")
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (segs.length === 0) return;
 
     const parentSel =
@@ -937,8 +930,6 @@ export function applySimplifiedShowInHidden(
     });
   });
 }
-
-
 
 /**
  * 简略模式隐藏元素，同时保留内部需要显示的子元素。
@@ -985,7 +976,6 @@ export function applySimplifiedHide1(
   }
 }
 
-
 /**
  * 在“简略模式”里，从已被隐藏的父元素中重新显示指定子元素。
  *
@@ -1011,11 +1001,17 @@ export function applySimplifiedShowInHidden1(
     .filter((l) => l && !l.startsWith("//"));
 
   // —— Step‑1：把 showRules 解析成 { parentSel, childSel } 列表 ——
-  interface Rule { parent: string; child: string; }
+  interface Rule {
+    parent: string;
+    child: string;
+  }
   const parsed: Rule[] = [];
 
   for (const raw of showRules) {
-    const segs = raw.split(">").map((s) => s.trim()).filter(Boolean);
+    const segs = raw
+      .split(">")
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (segs.length === 0) continue;
 
     if (segs.length === 1) {
@@ -1052,36 +1048,34 @@ export function applySimplifiedShowInHidden1(
   });
 }
 
-
-
-
-
-// 简略模式保留隐藏元素中指定的子元素 
+// 简略模式保留隐藏元素中指定的子元素
 // todo  子子孙孙都要考虑到，最好是用递归
 /**
  * 在简略模式中，让部分原本被隐藏的子元素重新显示。
  * @param container 根容器
  * @param rulesStr 多行规则，每行格式为 `父选择器 > 子选择器`（支持子孙选择器）
  */
-export function applySimplifiedShowInHidden0(container: HTMLElement, rulesStr: string) {
+export function applySimplifiedShowInHidden0(
+  container: HTMLElement,
+  rulesStr: string
+) {
   const rules = rulesStr
     .split("\n")
-    .map(line => line.trim())
-    .filter(line => line && !line.startsWith("//")); // 跳过空行和注释行
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("//")); // 跳过空行和注释行
 
   for (const rule of rules) {
-    const [parentSel, childSel] = rule.split(">").map(s => s.trim());
+    const [parentSel, childSel] = rule.split(">").map((s) => s.trim());
     if (!parentSel || !childSel) continue;
 
-    container.querySelectorAll(parentSel).forEach(parent => {
+    container.querySelectorAll(parentSel).forEach((parent) => {
       const children = parent.querySelectorAll(childSel);
-      children.forEach(child => {
+      children.forEach((child) => {
         (child as HTMLElement).style.display = "";
       });
     });
   }
 }
-
 
 /**
  * 在已执行 applySimplifiedHide 之后调用
@@ -1137,15 +1131,13 @@ export function applySimplifiedShowInHidden_1(
   }
 }
 
-
-
 // ：手动实现 click vs dblclick 识别
 // 这是目前最可靠的方式，适用于任何插件 UI（按钮、词条、面板等）：
 export function bindClickAndDoubleClick(
   el: HTMLElement,
   onClick: () => void,
   onDoubleClick: () => void,
-  timeout : number
+  timeout: number
 ) {
   let timer: number | null = null;
 

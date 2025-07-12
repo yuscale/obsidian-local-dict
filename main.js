@@ -6846,8 +6846,8 @@ function parseMarkdownReplaceRules(input) {
 function parseReplaceRules(text) {
     return text
         .split("\n")
-        .map(line => line.trim())
-        .filter(line => line.includes(","));
+        .map((line) => line.trim())
+        .filter((line) => line.includes(","));
 }
 /** 执行标签/类替换规则
  * 规则格式:
@@ -6861,7 +6861,7 @@ function parseReplaceRules(text) {
  */
 function replaceTagClassByRules(root, rules) {
     for (const rule of rules) {
-        let [fromStr, toStr] = rule.split(",").map(s => s.trim());
+        let [fromStr, toStr] = rule.split(",").map((s) => s.trim());
         // 解析 fromStr
         let fromTag = null;
         let fromClass = null;
@@ -6883,7 +6883,10 @@ function replaceTagClassByRules(root, rules) {
             }
             else {
                 fromTag = fromStr.slice(0, dotIndex);
-                fromClass = fromStr.slice(dotIndex + 1).split(".").join(" ");
+                fromClass = fromStr
+                    .slice(dotIndex + 1)
+                    .split(".")
+                    .join(" ");
             }
         }
         // 解析 toStr
@@ -6905,7 +6908,10 @@ function replaceTagClassByRules(root, rules) {
             }
             else {
                 toTag = toStr.slice(0, dotIndex);
-                toClass = toStr.slice(dotIndex + 1).split(".").join(" ");
+                toClass = toStr
+                    .slice(dotIndex + 1)
+                    .split(".")
+                    .join(" ");
             }
         }
         // 构造选择器
@@ -6923,14 +6929,14 @@ function replaceTagClassByRules(root, rules) {
         else {
             selector = "*";
         }
-        root.querySelectorAll(selector).forEach(el => {
+        root.querySelectorAll(selector).forEach((el) => {
             // 过滤tag
             if (fromTag && el.tagName.toLowerCase() !== fromTag.toLowerCase())
                 return;
             // 过滤class全部匹配
             if (fromClass) {
                 const classes = fromClass.split(" ");
-                if (!classes.every(c => el.classList.contains(c)))
+                if (!classes.every((c) => el.classList.contains(c)))
                     return;
             }
             // 创建新元素
@@ -7031,9 +7037,13 @@ function applySimplifiedView(container, simplified, settings) {
 }
 // 始终隐藏元素
 function applyGlobalHide(container, selectorsText) {
-    const selectors = selectorsText.split("\n").map(s => s.trim()).filter((l) => l && !l.startsWith("//")).filter(Boolean);
-    selectors.forEach(selector => {
-        container.querySelectorAll(selector).forEach(el => {
+    const selectors = selectorsText
+        .split("\n")
+        .map((s) => s.trim())
+        .filter((l) => l && !l.startsWith("//"))
+        .filter(Boolean);
+    selectors.forEach((selector) => {
+        container.querySelectorAll(selector).forEach((el) => {
             el.style.display = "none";
         });
     });
@@ -7209,11 +7219,11 @@ class LocalDictPlugin extends obsidian.Plugin {
         await this.loadSettings();
         // 添加设置面板
         this.addSettingTab(new LocalDictSettingTab(this.app, this));
-        this.app.workspace.onLayoutReady(() => this.activateView());
+        this.app.workspace.onLayoutReady(() => this.activateLocalDictView());
         this.addCommand({
             id: "open-local-dict-view",
             name: "Open Local Dict Viewer",
-            callback: () => this.activateView(),
+            callback: () => this.activateLocalDictView(),
         });
         this.addCommand({
             id: "navigate-back",
@@ -7292,8 +7302,10 @@ class LocalDictPlugin extends obsidian.Plugin {
                     new obsidian.Notice("Collection file path not set");
                     return;
                 }
-                else { //todo 
-                    const resolved = renderTemplate(path, { word: this.getCurrentWord() ?? "", });
+                else {
+                    const resolved = renderTemplate(path, {
+                        word: this.getCurrentWord() ?? "",
+                    });
                     await appendToFile(this.app, resolved, text + "\n");
                     new obsidian.Notice(`已追加内容到： ${resolved}`);
                 }
@@ -7345,9 +7357,7 @@ class LocalDictPlugin extends obsidian.Plugin {
             callback: () => this.view?.handleInsertCopySummaryToCursor?.(),
         });
         //  mark 双击触发。单词的输入点
-        this.registerDomEvent(document.body, "dblclick", (evt) => {
-            if (!this.isViewActive())
-                return; // ✅ 新增：屏蔽未激活时的双击
+        this.registerDomEvent(document.body, "dblclick", async (evt) => {
             const selection = window.getSelection();
             if (!selection || selection.isCollapsed)
                 return;
@@ -7357,8 +7367,19 @@ class LocalDictPlugin extends obsidian.Plugin {
                 .toString()
                 .replace(/[,*()#@!^$&*()\[\]{}，。；“”‘’！~～_]/g, " ") //去除没用的符号
                 .trim();
-            if (word)
+            // if (word) this.queryWord(word, 0, true);
+            if (evt.ctrlKey) {
+                console.log("ctrl key pressed ");
+                await this.activateLocalDictView(); // ⬅️ 展开右栏
+                // this.switchToLocalDictTab(); // ⬅️ 切换标签
+                this.queryWord(word, 0, true); // ⬅️ 查词
+            }
+            else {
+                console.log("no ctrl key pressed ");
+                if (!this.isViewActive())
+                    return; // ✅ 新增：屏蔽未激活时的双击
                 this.queryWord(word, 0, true);
+            }
         });
     }
     async saveSettings() {
@@ -7393,18 +7414,30 @@ class LocalDictPlugin extends obsidian.Plugin {
             this.queryWord(item.word, 0, false); // ⛔ 不更新历史记录
         }
     }
-    async activateView() {
+    async activateLocalDictView() {
         const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_WORD);
         if (leaves.length > 0) {
-            await leaves[0].setViewState({ type: VIEW_TYPE_WORD, active: true });
-            this.view = this.app.workspace.getActiveViewOfType(WordView) ?? null;
+            // 已经存在，直接激活
+            await this.app.workspace.revealLeaf(leaves[0]);
+            this.view = leaves[0].view;
             return;
         }
-        const leaf = this.app.workspace.getRightLeaf(false);
-        if (!leaf)
+        // 获取或创建右侧栏 leaf
+        const leaf = this.app.workspace.getRightLeaf(true); // ← 用 true 保证一定能获取到
+        if (!leaf) {
+            console.warn("无法获取右侧栏 leaf");
             return;
-        await leaf.setViewState({ type: VIEW_TYPE_WORD, active: true });
-        this.view = this.app.workspace.getActiveViewOfType(WordView) ?? null;
+        }
+        // 设置 viewState，显示你的视图
+        await leaf.setViewState({
+            type: VIEW_TYPE_WORD,
+            active: true,
+        });
+        // 激活它
+        await this.app.workspace.revealLeaf(leaf);
+        // 获取视图实例
+        this.view = leaf.view instanceof WordView ? leaf.view : null;
+        console.log("展开右栏");
     }
     async queryWord(word, depth = 0, record = true) {
         // 开始查询时可设定 loading UI
@@ -7426,7 +7459,6 @@ class LocalDictPlugin extends obsidian.Plugin {
             const pathParts = url.pathname.split("/"); // 得到 ["", "api", "query", "WM"]
             // 提取 "api" 和 "query"
             const query = `${pathParts[1]}/${pathParts[2]}`;
-            const queryGP = `${pathParts[1]}/${pathParts[2]}/${pathParts[3]}`;
             const firstLine = html.split("\n")[0].trim(); //"<p>Entry noncount not found. Suggestions:</p>"
             // 未找到词条且不含有内部链接
             if (!html.includes(query) && firstLine.includes("not found")) {
@@ -7486,12 +7518,6 @@ class LocalDictPlugin extends obsidian.Plugin {
             new obsidian.Notice("查询失败：" + e);
             if (this.view?.checkServiceStatus)
                 this.view.checkServiceStatus();
-            // // ✅ 清空界面并显示空白内容
-            // const empty = document.createElement("div");
-            // empty.innerHTML = `<p style="color: var(--text-muted); text-align: center; margin-top: 1em;">❌ 查询失败，可能未启动词典服务</p>`;
-            // // this.view?.setContent(empty, word); // 👈 传入当前单词以保留上下文
-            // // ✅ 显示空界面，避免历史记录错位渲染到 searchbar
-            // this.view?.setContent("", "");
             // ✅ 显示空结果（确保结果容器不为空）
             const error = document.createElement("div");
             error.textContent = "查询失败：" + e.message;
@@ -7564,7 +7590,7 @@ class WordView extends obsidian.ItemView {
         return VIEW_TYPE_WORD;
     }
     getDisplayText() {
-        return "本地词典";
+        return "Local Dict Viewer";
     }
     getIcon() {
         return "anvil";
@@ -7629,7 +7655,8 @@ class WordView extends obsidian.ItemView {
         // copyAll   copySummary.onclick = () => this.copyAll();
         // copySummary.onclick = () => this.copySummary();
         bindClickAndDoubleClickWithSetting(copyAll, this.plugin, () => this.copyAll(), // 单击复制到剪贴板
-        () => this.handleCopyAllToFile());
+        () => this.handleCopyAllToFile() // 双击保存到文件（如果启用）
+        );
         bindClickAndDoubleClickWithSetting(copySummary, this.plugin, () => this.copySummary(), // 单击复制到剪贴板
         () => this.handleCopySummaryToFile() // 双击保存到文件（如果启用）
         );
@@ -7753,7 +7780,9 @@ class WordView extends obsidian.ItemView {
                         new obsidian.Notice("未设置收集文件路径");
                         return;
                     }
-                    const resolved = renderTemplate(path, { word: this.currentWord ?? "" });
+                    const resolved = renderTemplate(path, {
+                        word: this.currentWord ?? "",
+                    });
                     await appendToFile(this.plugin.app, resolved, selectedText + "\n");
                     new obsidian.Notice(`已追加内容到：：${resolved}`);
                 });
@@ -7906,7 +7935,7 @@ class WordView extends obsidian.ItemView {
         // this.contentElInner.scrollTo({ top: 0, behavior: "auto" });
         this.contentEl.scrollTo({ top: 0, behavior: "auto" });
         // 最后更新输入框内文字
-        console.log("Here is the current word: " + this.currentWord);
+        // console.log("Here is the current word: " + this.currentWord);
         // this.inputEl.setText(this.currentWord);
         // this.inputEl.setAttr("text", this.currentWord);
         this.inputEl.value = this.currentWord;
@@ -8019,7 +8048,7 @@ class WordView extends obsidian.ItemView {
         const md = await this.copyAll(true); // 返回 markdown 内容
         const path = this.plugin.settings.copyAllLogPath?.trim();
         if (!path) {
-            new obsidian.Notice("未设置复制全部的插入文件路径");
+            new obsidian.Notice("未设置复制全部的保存文件路径");
             return;
         }
         if (this.currentWord) {
@@ -8037,7 +8066,7 @@ class WordView extends obsidian.ItemView {
         const md = await this.copySummary(true); // 返回 markdown 内容
         const path = this.plugin.settings.copySummaryLogPath?.trim();
         if (!path) {
-            new obsidian.Notice("未设置复制简略的插入文件路径");
+            new obsidian.Notice("未设置复制简略的保存文件路径");
             return;
         }
         if (this.currentWord) {
@@ -8217,8 +8246,12 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
         containerEl.createEl("p", {
             text: "词典显示时先按照下面的元素替换规则进行替换，得到初始版本词典内容。",
         });
-        containerEl.createEl("p", { text: "之后在显示时按照下方的隐藏规则进行显示。" });
-        containerEl.createEl("p", { text: "本节中所提及的选择器为有效的 CSS 选择器即可。" });
+        containerEl.createEl("p", {
+            text: "之后在显示时按照下方的隐藏规则进行显示。",
+        });
+        containerEl.createEl("p", {
+            text: "本节中所提及的选择器为有效的 CSS 选择器即可。",
+        });
         // 标签替换规则说明 + 设置
         new obsidian.Setting(containerEl)
             .setName("元素替换规则设置")
