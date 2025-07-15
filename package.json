@@ -6,12 +6,16 @@
   "scripts": {
     "build": "rollup -c",
     "zip": "npm run build && zip \"dist/Local Dict.zip\" manifest.json main.js styles.css",
-    "dev": "rollup --config rollup.config.mjs -w"
+    "dev": "rollup --config rollup.config.mjs -w",
+    "pack": "node pack-with-version.js"
+
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^28.0.6",
     "@rollup/plugin-node-resolve": "^16.0.1",
     "@types/node": "^24.0.10",
+    "archiver": "^7.0.1",
+    "fs-extra": "^11.3.0",
     "obsidian": "^1.8.7",
     "rollup": "^3.29.0",
     "rollup-plugin-typescript2": "^0.34.1",
