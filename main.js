@@ -7221,6 +7221,8 @@ class LocalDictPlugin extends obsidian.Plugin {
         // 添加设置面板
         this.addSettingTab(new LocalDictSettingTab(this.app, this));
         this.app.workspace.onLayoutReady(() => this.activateLocalDictView());
+        // ⬇️ 一行搞定：开启 PDF 双击取词
+        this.enablePdfLookup();
         this.addCommand({
             id: "open-local-dict-view",
             name: "Open Local Dict Viewer",
@@ -7382,6 +7384,65 @@ class LocalDictPlugin extends obsidian.Plugin {
                 this.queryWord(word, 0, true);
             }
         });
+    } // onload end
+    /* -------------------------------------------------------------------------- */
+    /*  核心整合逻辑
+     *  - 使 PDF.js textLayer 可选中
+     *  - 实现 Ctrl+双击 / 普通双击 的取词逻辑
+     *  放入你的 Plugin 子类（假设名为 LocalDictPlugin）中：
+     *    1. 在 onload() 里调用 this.enablePdfLookup();
+     *    2. 其余辅助方法（activateLocalDictView, queryWord 等）沿用你已有实现。
+     * -------------------------------------------------------------------------- */
+    enablePdfLookup() {
+        this.registerDomEvent(document.body, "dblclick", async (evt) => {
+            const target = evt.target;
+            // 只在 PDF 的文字层中响应
+            if (!target.closest(".textLayer"))
+                return;
+            let word = "";
+            // 1. 优先尝试获取用户手动选中的词
+            const sel = window.getSelection();
+            if (sel && !sel.isCollapsed) {
+                word = sel.toString().trim();
+            }
+            // 2. 如果未能获取选中词（如双击失败），尝试手动提取
+            if (!word) {
+                const range = document.caretRangeFromPoint?.(evt.clientX, evt.clientY) ??
+                    document.caretPositionFromPoint?.(evt.clientX, evt.clientY);
+                if (range) {
+                    const node = range.startContainer;
+                    if (node?.textContent) {
+                        const offset = range.startOffset;
+                        word = this.extractWordAround(node.textContent, offset);
+                    }
+                }
+            }
+            // 3. 清洗提取到的内容，去除符号
+            word = word.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+            if (!word)
+                return;
+            // 4. Ctrl + 双击：强制打开面板 + 查词
+            if (evt.ctrlKey) {
+                await this.activateLocalDictView();
+                this.queryWord(word, 0, true);
+                return;
+            }
+            // 5. 普通双击，仅当面板已展开时才查词
+            if (this.isViewActive()) {
+                this.queryWord(word, 0, true);
+            }
+        });
+    }
+    // ⬇️ 辅助函数：从 offset 处提取完整单词
+    extractWordAround(text, offset) {
+        const isWordChar = (ch) => /\p{L}|\p{N}/u.test(ch);
+        let start = offset;
+        let end = offset;
+        while (start > 0 && isWordChar(text[start - 1]))
+            start--;
+        while (end < text.length && isWordChar(text[end]))
+            end++;
+        return text.slice(start, end);
     }
     async saveSettings() {
         await this.saveData(this.settings);

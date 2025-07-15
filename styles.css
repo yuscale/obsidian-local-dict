@@ -186,7 +186,7 @@ local-dict-toggle-btn {
 }
 
 /* 自己的 button 样式 <全部简略> */
-.
+
 /* 通用按钮样式 */
 .nav-btn {
     width: 28px;
@@ -300,6 +300,11 @@ local-dict-toggle-btn {
     border-left-color: var(--text-accent);
 }
 
+/* pdf 选词  */
+.textLayer, .textLayerNode {
+    user-select: text !important;
+    pointer-events: auto !important;
+}
 
 /*      以上为 Local Dictionary 的界面样式       */
 /*      以下为词典显示的样式，可以自行添加       */
