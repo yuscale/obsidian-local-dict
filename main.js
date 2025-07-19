@@ -7172,6 +7172,8 @@ const DEFAULT_SETTINGS = {
     copySummarySuffix: "\n",
     copyAllPrefix: "\n## {{word}}\n",
     copyAllSuffix: "\n",
+    rightClickAppendToFilePrefix: "",
+    rightClickAppendToFileSuffix: "",
     simplifiedGlobalHideSelectors: "",
     simplifiedHideSelectors: ".bc\n.def_text\n.sd\n//例句\n.vis_w\n.un_text\n//名词 noncount\n.sense .sgram\n.sense .wsgram\n// 派生词\n.uro_line .gram\n",
     simplifiedShowInHiddenSelectors: ".un_text,.mw_zh\n.uro .vis_w, .vis",
@@ -7831,7 +7833,7 @@ class WordView extends obsidian.ItemView {
                     .setTitle("插入选中文本到光标处")
                     .setIcon("pencil")
                     .onClick(async () => {
-                    const success = await insertAtCursor(this.plugin.app, selectedText);
+                    const success = await insertAtCursor(this.plugin.app, "\n" + selectedText + "\n");
                     if (!success) {
                         new obsidian.Notice("插入失败：未检测到活动 Markdown 编辑器");
                     }
@@ -7850,7 +7852,7 @@ class WordView extends obsidian.ItemView {
                     const resolved = renderTemplate(path, {
                         word: this.currentWord ?? "",
                     });
-                    await appendToFile(this.plugin.app, resolved, selectedText + "\n");
+                    await appendToFile(this.plugin.app, resolved, this.perseRCContent(selectedText) + "\n");
                     new obsidian.Notice(`已追加内容到：：${resolved}`);
                 });
             });
@@ -7910,6 +7912,11 @@ class WordView extends obsidian.ItemView {
                 };
             }
         });
+    }
+    // mark
+    perseRCContent(selectedText) {
+        const text = formatMarkdownOutput(this.currentWord, selectedText, this.plugin.settings.rightClickAppendToFilePrefix, this.plugin.settings.rightClickAppendToFileSuffix);
+        return text;
     }
     /** 渲染历史列表 */
     renderHistory() {
@@ -8280,7 +8287,7 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
             .setDesc("")
             .addText((text) => {
             text
-                .setPlaceholder("如 [logs/all-YYYYMMDD.txt]")
+                .setPlaceholder("如 logs/all-{{YYYYMMDD}}.txt")
                 .setValue(this.plugin.settings.copyAllLogPath || "")
                 .onChange(async (value) => {
                 this.plugin.settings.copyAllLogPath = value;
@@ -8292,7 +8299,7 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
             .setDesc("")
             .addText((text) => {
             text
-                .setPlaceholder("如 [logs/summary-YYYYMMDD.txt]")
+                .setPlaceholder("如 logs/summary-{{YYYYMMDD}}.txt")
                 .setValue(this.plugin.settings.copySummaryLogPath || "")
                 .onChange(async (value) => {
                 this.plugin.settings.copySummaryLogPath = value;
@@ -8304,7 +8311,7 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
             .setDesc("")
             .addText((text) => {
             text
-                .setPlaceholder("如 [logs/context-YYYYMMDD.txt]")
+                .setPlaceholder("如 logs/context-{{YYYYMMDD}}.txt")
                 .setValue(this.plugin.settings.contextMenuLogPath || "")
                 .onChange(async (value) => {
                 this.plugin.settings.contextMenuLogPath = value;
@@ -8519,12 +8526,14 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
         };
         // ✅ 简略内容设置（前缀 + 后缀）
         buildRow.call(this, containerEl, "复制简略内容 - 前缀", "copySummaryPrefix", "复制简略内容 - 后缀", "copySummarySuffix");
+        // ✅ 全部内容设置（前缀 + 后缀）
+        buildRow.call(this, containerEl, "复制全部内容 - 前缀", "copyAllPrefix", "复制全部内容 - 后缀", "copyAllSuffix");
         // ✅ 自定义“细”分隔线（替代 <hr>）
         const divid2 = containerEl.createEl("div");
         divid2.style.borderTop = "1px solid var(--background-modifier-border)";
         divid2.style.margin = "1em 0";
-        // ✅ 全部内容设置（前缀 + 后缀）
-        buildRow.call(this, containerEl, "复制全部内容 - 前缀", "copyAllPrefix", "复制全部内容 - 后缀", "copyAllSuffix");
+        // ✅ 右键收集文件设置（前缀 + 后缀）
+        buildRow.call(this, containerEl, "追加到收集文件 - 前缀", "rightClickAppendToFilePrefix", "追加到收集文件 - 后缀", "rightClickAppendToFileSuffix");
         // 输出时在前后添加自定义文本，支持moment   🔼
         containerEl.createEl("h4", { text: "历史记录处理" });
         // ✅ 历史记录只读展示 + 清空按钮

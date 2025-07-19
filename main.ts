@@ -54,6 +54,8 @@ interface LocalDictPluginSettings {
   copySummarySuffix: string;
   copyAllPrefix: string;
   copyAllSuffix: string;
+  rightClickAppendToFilePrefix: string;
+  rightClickAppendToFileSuffix: string;
 
   simplifiedGlobalHideSelectors: string;
   simplifiedHideSelectors: string;
@@ -90,6 +92,8 @@ const DEFAULT_SETTINGS: LocalDictPluginSettings = {
   copySummarySuffix: "\n",
   copyAllPrefix: "\n## {{word}}\n",
   copyAllSuffix: "\n",
+  rightClickAppendToFilePrefix: "",
+  rightClickAppendToFileSuffix: "",
 
   simplifiedGlobalHideSelectors: "",
   simplifiedHideSelectors:
@@ -909,7 +913,10 @@ class WordView extends ItemView {
           .setTitle("插入选中文本到光标处")
           .setIcon("pencil")
           .onClick(async () => {
-            const success = await insertAtCursor(this.plugin.app, selectedText);
+            const success = await insertAtCursor(
+              this.plugin.app,
+              "\n" + selectedText + "\n"
+            );
             if (!success) {
               new Notice("插入失败：未检测到活动 Markdown 编辑器");
             }
@@ -930,7 +937,7 @@ class WordView extends ItemView {
               word: this.currentWord ?? "",
             });
 
-            await appendToFile(this.plugin.app, resolved, selectedText + "\n");
+            await appendToFile( this.plugin.app, resolved, this.perseRCContent(selectedText) + "\n" );
             new Notice(`已追加内容到：：${resolved}`);
           });
       });
@@ -1000,6 +1007,17 @@ class WordView extends ItemView {
         };
       }
     });
+  }
+
+  // mark
+  perseRCContent(selectedText) {
+    const text = formatMarkdownOutput(
+      this.currentWord,
+      selectedText,
+      this.plugin.settings.rightClickAppendToFilePrefix,
+      this.plugin.settings.rightClickAppendToFileSuffix
+    );
+    return text;
   }
 
   /** 渲染历史列表 */
@@ -1464,7 +1482,7 @@ class LocalDictSettingTab extends PluginSettingTab {
       .setDesc("")
       .addText((text) => {
         text
-          .setPlaceholder("如 [logs/all-YYYYMMDD.txt]")
+          .setPlaceholder("如 logs/all-{{YYYYMMDD}}.txt")
           .setValue(this.plugin.settings.copyAllLogPath || "")
           .onChange(async (value) => {
             this.plugin.settings.copyAllLogPath = value;
@@ -1477,7 +1495,7 @@ class LocalDictSettingTab extends PluginSettingTab {
       .setDesc("")
       .addText((text) => {
         text
-          .setPlaceholder("如 [logs/summary-YYYYMMDD.txt]")
+          .setPlaceholder("如 logs/summary-{{YYYYMMDD}}.txt")
           .setValue(this.plugin.settings.copySummaryLogPath || "")
           .onChange(async (value) => {
             this.plugin.settings.copySummaryLogPath = value;
@@ -1490,7 +1508,7 @@ class LocalDictSettingTab extends PluginSettingTab {
       .setDesc("")
       .addText((text) => {
         text
-          .setPlaceholder("如 [logs/context-YYYYMMDD.txt]")
+          .setPlaceholder("如 logs/context-{{YYYYMMDD}}.txt")
           .setValue(this.plugin.settings.contextMenuLogPath || "")
           .onChange(async (value) => {
             this.plugin.settings.contextMenuLogPath = value;
@@ -1755,11 +1773,6 @@ class LocalDictSettingTab extends PluginSettingTab {
       "copySummarySuffix"
     );
 
-    // ✅ 自定义“细”分隔线（替代 <hr>）
-    const divid2 = containerEl.createEl("div");
-    divid2.style.borderTop = "1px solid var(--background-modifier-border)";
-    divid2.style.margin = "1em 0";
-
     // ✅ 全部内容设置（前缀 + 后缀）
     buildRow.call(
       this,
@@ -1768,6 +1781,21 @@ class LocalDictSettingTab extends PluginSettingTab {
       "copyAllPrefix",
       "复制全部内容 - 后缀",
       "copyAllSuffix"
+    );
+
+    // ✅ 自定义“细”分隔线（替代 <hr>）
+    const divid2 = containerEl.createEl("div");
+    divid2.style.borderTop = "1px solid var(--background-modifier-border)";
+    divid2.style.margin = "1em 0";
+    
+    // ✅ 右键收集文件设置（前缀 + 后缀）
+    buildRow.call(
+      this,
+      containerEl,
+      "追加到收集文件 - 前缀",
+      "rightClickAppendToFilePrefix",
+      "追加到收集文件 - 后缀",
+      "rightClickAppendToFileSuffix"
     );
 
     // 输出时在前后添加自定义文本，支持moment   🔼
