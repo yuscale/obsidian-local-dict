@@ -20,10 +20,86 @@
     {
       "word": "discover",
       "time": "20250715 121239"
+    },
+    {
+      "word": "enter",
+      "time": "20250719 134912"
+    },
+    {
+      "word": "ground",
+      "time": "20250719 134921"
+    },
+    {
+      "word": "big",
+      "time": "20250719 134923"
+    },
+    {
+      "word": "better",
+      "time": "20250719 134923"
+    },
+    {
+      "word": "grown",
+      "time": "20250719 134924"
+    },
+    {
+      "word": "unable",
+      "time": "20250719 134928"
+    },
+    {
+      "word": "who",
+      "time": "20250719 134928"
+    },
+    {
+      "word": "person",
+      "time": "20250719 134929"
+    },
+    {
+      "word": "damage",
+      "time": "20250719 134930"
+    },
+    {
+      "word": "brain",
+      "time": "20250719 134930"
+    },
+    {
+      "word": "severe",
+      "time": "20250719 134932"
+    },
+    {
+      "word": "sometimes",
+      "time": "20250719 134933"
+    },
+    {
+      "word": "necessary",
+      "time": "20250719 134935"
+    },
+    {
+      "word": "the",
+      "time": "20250719 134936"
+    },
+    {
+      "word": "patient",
+      "time": "20250719 134937"
+    },
+    {
+      "word": "intensive",
+      "time": "20250719 134937"
+    },
+    {
+      "word": "care",
+      "time": "20250719 134938"
+    },
+    {
+      "word": "move",
+      "time": "20250719 135010"
+    },
+    {
+      "word": "and",
+      "time": "20250719 135059"
     }
   ],
   "maxHistory": 500,
-  "currentHistoryIndex": 1,
+  "currentHistoryIndex": 20,
   "copyAllLogPath": "all.md",
   "copySummaryLogPath": "daily/{{YYYYMMDD}}.md",
   "contextMenuLogPath": "456.md",

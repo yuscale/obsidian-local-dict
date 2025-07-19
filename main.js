@@ -7705,8 +7705,10 @@ class WordView extends obsidian.ItemView {
     async onOpen() {
         this.contentEl.empty();
         this.setupEditorTracking(); //监听器会在你右键打开编辑器菜单时，提前保存下当前的编辑器和光标位置
-        const container = this.contentEl.createDiv("local-dict-container");
-        container.style.position = "relative"; // ✅ 确保浮动面板的定位是基于父容器，而不是整个页面。
+        this.contentEl.classList.add("local-dict-container");
+        const container = this.contentEl;
+        // const container = this.contentEl.createDiv("local-dict-container");
+        container.style.overflow = "hidden";
         container.style.display = "flex";
         container.style.flexDirection = "column";
         container.style.height = "100%";
@@ -7794,8 +7796,9 @@ class WordView extends obsidian.ItemView {
         this.contentElInner = container.createDiv("local-dict-html");
         this.contentElInner.style.display = "flex";
         this.contentElInner.style.flexDirection = "column";
-        this.contentElInner.style.height = "100%";
+        // this.contentElInner.style.height = "100%";
         this.contentElInner.style.overflowY = "auto";
+        this.contentElInner.style.position = "relative"; // ✅ 确保浮动面板的定位是基于父容器，而不是整个页面。
         // 自己生成的右键菜单
         this.contentElInner.addEventListener("contextmenu", (e) => {
             e.preventDefault(); // 阻止默认菜单
@@ -7865,6 +7868,8 @@ class WordView extends obsidian.ItemView {
         // ——— 历史面板（浮动） ———
         // 创建历史记录面板，始终显示在 html 内部
         this.historyContainer = this.contentElInner.createDiv("local-dict-history");
+        // 创建历史记录面板，与 html 并列显示
+        this.historyContainer = container.createDiv("local-dict-history");
         this.historyContainer.style.display = "none"; // 默认隐藏
         showHistoryBtn.onclick = () => {
             if (this.historyContainer.style.display === "block") {

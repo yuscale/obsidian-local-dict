@@ -1,11 +1,12 @@
 
 /*      以下为 Local Dictionary 的界面样式   最好不要修改    */
 /* 确保 view-content 使用相对定位，允许其子元素绝对定位 */
-.view-content {
-    position: relative;
+.view-content.local-dict-container {
+/* .view-content { */
+    /* position: relative; */
     padding: 0 !important;
-    /* 移除默认 padding */
 }
+/* 移除默认 padding */
 
 /* .local-dict-container {
     display: flex;
@@ -77,14 +78,14 @@
     background-color: var(--background-modifier-hover);
 }
 
-local-dict-toggle-btn {
+/* .local-dict-toggle-btn {
     background: var(--background-modifier-hover);
     border: 1px solid var(--divider-color);
     border-radius: 6px;
     padding: 4px 12px;
     cursor: pointer;
     font-size: var(--font-ui-small);
-}
+} */
 
 .local-dict-toggle-btn span {
     user-select: none;
@@ -109,6 +110,7 @@ local-dict-toggle-btn {
 .local-dict-history {
     position: absolute;
     top: 90px;
+    /* top: 10px; */
     left: 10px;
     z-index: 999;
     background-color: var(--background-primary);
@@ -122,8 +124,9 @@ local-dict-toggle-btn {
     overflow-y: auto;
     min-width: 120px;
     border-radius: 4px;
-    max-height: calc(100vh - 160px);
     /* 限制最大高度 */
+    max-height: calc(90% - 90px);
+    /* max-height: 50%; */
 }
 
 /* 历史记录项样式（可选美化） */
@@ -185,7 +188,7 @@ local-dict-toggle-btn {
     gap: 0;
 }
 
-/* 自己的 button 样式 <全部简略> */
+/* 自己的 button 样式 <全部|简略> */
 
 /* 通用按钮样式 */
 .nav-btn {

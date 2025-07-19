@@ -342,64 +342,64 @@ export default class LocalDictPlugin extends Plugin {
    * -------------------------------------------------------------------------- */
 
   private enablePdfLookup() {
-  this.registerDomEvent(document.body, "dblclick", async (evt: MouseEvent) => {
-    const target = evt.target as HTMLElement;
+    this.registerDomEvent(document.body, "dblclick", async (evt: MouseEvent) => {
+      const target = evt.target as HTMLElement;
 
-    // 只在 PDF 的文字层中响应
-    if (!target.closest(".textLayer")) return;
+      // 只在 PDF 的文字层中响应
+      if (!target.closest(".textLayer")) return;
 
-    let word = "";
+      let word = "";
 
-    // 1. 优先尝试获取用户手动选中的词
-    const sel = window.getSelection();
-    if (sel && !sel.isCollapsed) {
-      word = sel.toString().trim();
-    }
+      // 1. 优先尝试获取用户手动选中的词
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) {
+        word = sel.toString().trim();
+      }
 
-    // 2. 如果未能获取选中词（如双击失败），尝试手动提取
-    if (!word) {
-      const range =
-        document.caretRangeFromPoint?.(evt.clientX, evt.clientY) ??
-        (document as any).caretPositionFromPoint?.(evt.clientX, evt.clientY);
+      // 2. 如果未能获取选中词（如双击失败），尝试手动提取
+      if (!word) {
+        const range =
+          document.caretRangeFromPoint?.(evt.clientX, evt.clientY) ??
+          (document as any).caretPositionFromPoint?.(evt.clientX, evt.clientY);
 
-      if (range) {
-        const node = (range as any).startContainer;
-        if (node?.textContent) {
-          const offset = (range as any).startOffset;
-          word = this.extractWordAround(node.textContent, offset);
+        if (range) {
+          const node = (range as any).startContainer;
+          if (node?.textContent) {
+            const offset = (range as any).startOffset;
+            word = this.extractWordAround(node.textContent, offset);
+          }
         }
       }
-    }
 
-    // 3. 清洗提取到的内容，去除符号
-    word = word.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-    if (!word) return;
+      // 3. 清洗提取到的内容，去除符号
+      word = word.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+      if (!word) return;
 
-    // 4. Ctrl + 双击：强制打开面板 + 查词
-    if (evt.ctrlKey) {
-      await this.activateLocalDictView();
-      this.queryWord(word, 0, true);
-      return;
-    }
+      // 4. Ctrl + 双击：强制打开面板 + 查词
+      if (evt.ctrlKey) {
+        await this.activateLocalDictView();
+        this.queryWord(word, 0, true);
+        return;
+      }
 
-    // 5. 普通双击，仅当面板已展开时才查词
-    if (this.isViewActive()) {
-      this.queryWord(word, 0, true);
-    }
-  });
-}
+      // 5. 普通双击，仅当面板已展开时才查词
+      if (this.isViewActive()) {
+        this.queryWord(word, 0, true);
+      }
+    });
+  }
 
-// ⬇️ 辅助函数：从 offset 处提取完整单词
-extractWordAround(text: string, offset: number): string {
-  const isWordChar = (ch: string) => /\p{L}|\p{N}/u.test(ch);
-  let start = offset;
-  let end = offset;
+  // ⬇️ 辅助函数：从 offset 处提取完整单词
+  extractWordAround(text: string, offset: number): string {
+    const isWordChar = (ch: string) => /\p{L}|\p{N}/u.test(ch);
+    let start = offset;
+    let end = offset;
 
-  while (start > 0 && isWordChar(text[start - 1])) start--;
-  while (end < text.length && isWordChar(text[end])) end++;
+    while (start > 0 && isWordChar(text[start - 1])) start--;
+    while (end < text.length && isWordChar(text[end])) end++;
 
-  return text.slice(start, end);
-}
+    return text.slice(start, end);
+  }
 
 
 
@@ -744,8 +744,11 @@ class WordView extends ItemView {
     this.contentEl.empty();
     this.setupEditorTracking(); //监听器会在你右键打开编辑器菜单时，提前保存下当前的编辑器和光标位置
 
-    const container = this.contentEl.createDiv("local-dict-container");
-    container.style.position = "relative"; // ✅ 确保浮动面板的定位是基于父容器，而不是整个页面。
+    this.contentEl.classList.add("local-dict-container");
+    const container = this.contentEl;
+    // const container = this.contentEl.createDiv("local-dict-container");
+
+    container.style.overflow = "hidden";
     container.style.display = "flex";
     container.style.flexDirection = "column";
     container.style.height = "100%";
@@ -864,8 +867,9 @@ class WordView extends ItemView {
     this.contentElInner = container.createDiv("local-dict-html");
     this.contentElInner.style.display = "flex";
     this.contentElInner.style.flexDirection = "column";
-    this.contentElInner.style.height = "100%";
+    // this.contentElInner.style.height = "100%";
     this.contentElInner.style.overflowY = "auto";
+    this.contentElInner.style.position = "relative"; // ✅ 确保浮动面板的定位是基于父容器，而不是整个页面。
 
     // 自己生成的右键菜单
     this.contentElInner.addEventListener("contextmenu", (e: MouseEvent) => {
@@ -947,6 +951,8 @@ class WordView extends ItemView {
     // ——— 历史面板（浮动） ———
     // 创建历史记录面板，始终显示在 html 内部
     this.historyContainer = this.contentElInner.createDiv("local-dict-history");
+    // 创建历史记录面板，与 html 并列显示
+    this.historyContainer = container.createDiv("local-dict-history");
     this.historyContainer.style.display = "none"; // 默认隐藏
 
     showHistoryBtn.onclick = () => {
