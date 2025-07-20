@@ -7,7 +7,7 @@
     "build": "rollup -c",
     "zip": "npm run build && zip \"dist/Local Dict.zip\" manifest.json main.js styles.css",
     "dev": "rollup --config rollup.config.mjs -w",
-    "pack": "node pack-with-version.js"
+    "pack": "npm run build && node pack-with-version.js"
 
   },
   "devDependencies": {

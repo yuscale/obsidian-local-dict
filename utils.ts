@@ -59,7 +59,9 @@ export async function insertAtCursor(app: App, text: string): Promise<boolean> {
   }
 
   // 插入文本
-  view.editor.replaceSelection(text);
+  // view.editor.replaceSelection(text);
+  view.editor.replaceRange(text, view.editor.getCursor());
+
   new Notice("已插入内容到当前文件中");
   return true;
 }

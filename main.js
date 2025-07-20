@@ -6688,7 +6688,8 @@ async function insertAtCursor(app, text) {
         return false;
     }
     // 插入文本
-    view.editor.replaceSelection(text);
+    // view.editor.replaceSelection(text);
+    view.editor.replaceRange(text, view.editor.getCursor());
     new obsidian.Notice("已插入内容到当前文件中");
     return true;
 }
