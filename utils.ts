@@ -59,7 +59,7 @@ export async function insertAtCursor(app: App, text: string): Promise<boolean> {
 
   // 等待编辑器初始化（有时是必须的，避免 insert 太快）
   await sleep(50);
-  
+
   // 强制聚焦活动文件（确保 Markdown 编辑器可用）
   // await app.workspace.openLinkText(activeFile.path, "", false);
 
@@ -74,7 +74,7 @@ export async function insertAtCursor(app: App, text: string): Promise<boolean> {
   // view.editor.replaceSelection(text);
   view.editor.replaceRange(text, view.editor.getCursor());
 
-  console.log(view.editor);
+  // console.log(view.editor);
   new Notice("已插入内容到当前文件中");
   return true;
 }
