@@ -164,19 +164,19 @@ export default class LocalDictPlugin extends Plugin {
 
     this.addCommand({
       id: "navigate-back",
-      name: "📘 Local Dict: Navigate Back",
+      name: "Local Dict: Navigate Back",
       callback: () => this.navigateBack(),
     });
 
     this.addCommand({
       id: "navigate-forward",
-      name: "📘 Local Dict: Navigate Forward",
+      name: "Local Dict: Navigate Forward",
       callback: () => this.navigateForward(),
     });
 
     this.addCommand({
       id: "toggle-history-panel",
-      name: "📘 Local Dict: Toggle History Panel",
+      name: "Local Dict: Toggle History Panel",
       callback: () => {
         const view = this.view;
         if (view?.historyContainer) {
@@ -190,7 +190,7 @@ export default class LocalDictPlugin extends Plugin {
 
     this.addCommand({
       id: "copy-all",
-      name: "📘 Local Dict: Copy All to Clipboard",
+      name: "Local Dict: Copy All to Clipboard",
       callback: () => {
         this.view?.copyAll();
       },
@@ -198,7 +198,7 @@ export default class LocalDictPlugin extends Plugin {
 
     this.addCommand({
       id: "copy-summary",
-      name: "📘 Local Dict: Copy Summary to Clipboard",
+      name: "Local Dict: Copy Summary to Clipboard",
       callback: () => {
         this.view?.copySummary();
       },
@@ -206,7 +206,7 @@ export default class LocalDictPlugin extends Plugin {
 
     this.addCommand({
       id: "toggle-simplified-mode",
-      name: "📘 Local Dict: Toggle Simplified View",
+      name: "Local Dict: Toggle Simplified View",
       callback: () => {
         if (!this.view) return;
         this.view.toggleSimplified();
@@ -216,7 +216,7 @@ export default class LocalDictPlugin extends Plugin {
 
     this.addCommand({
       id: "insert-selected-text",
-      name: "📘 Local Dict: Insert Selected Text at Cursor",
+      name: "Local Dict: Insert Selected Text at Cursor",
       callback: async () => {
         const text = this.lastSelectedText?.trim();
         if (!text) {
@@ -233,7 +233,7 @@ export default class LocalDictPlugin extends Plugin {
 
     this.addCommand({
       id: "append-selected-text",
-      name: "📘 Local Dict: Append Selected Text to Collection File",
+      name: "Local Dict: Append Selected Text to Collection File",
       callback: async () => {
         const text = this.lastSelectedText?.trim();
         if (!text) {
@@ -258,7 +258,7 @@ export default class LocalDictPlugin extends Plugin {
 
     this.addCommand({
       id: "copy-selected-text",
-      name: "📘 Local Dict: Copy Selected Text to Clipboard",
+      name: "Local Dict: Copy Selected Text to Clipboard",
       callback: async () => {
         const text = this.lastSelectedText?.trim();
         if (!text) {
@@ -273,19 +273,19 @@ export default class LocalDictPlugin extends Plugin {
 
     this.addCommand({
       id: "copy-all-to-log-file",
-      name: "📘 Local Dict: Copy All and Append to Log File (Double Click)",
+      name: "Local Dict: Copy All and Append to Log File (Double Click)",
       callback: () => this.view?.handleCopyAllToFile?.(),
     });
 
     this.addCommand({
       id: "copy-summary-to-log-file",
-      name: "📘 Local Dict: Copy Summary and Append to Log File (Double Click)",
+      name: "Local Dict: Copy Summary and Append to Log File (Double Click)",
       callback: () => this.view?.handleCopySummaryToFile?.(),
     });
 
     this.addCommand({
       id: "query-current-selected-word",
-      name: "📘 Local Dict: Query Current Selected Word",
+      name: "Local Dict: Query Current Selected Word",
       callback: () => {
         if (this.view?.currentWord) {
           this.queryWord(this.view.currentWord, 0);
@@ -297,13 +297,13 @@ export default class LocalDictPlugin extends Plugin {
 
     this.addCommand({
       id: "insert-copy-all-at-cursor",
-      name: "📘 Local Dict: Insert Copied All Content at Cursor (Right Click)",
+      name: "Local Dict: Insert Copied All Content at Cursor (Right Click)",
       callback: () => this.view?.handleInsertCopyAllToCursor?.(),
     });
 
     this.addCommand({
       id: "insert-copy-summary-at-cursor",
-      name: "📘 Local Dict: Insert Copied Summary at Cursor (Right Click)",
+      name: "Local Dict: Insert Copied Summary at Cursor (Right Click)",
       callback: () => this.view?.handleInsertCopySummaryToCursor?.(),
     });
 
@@ -318,7 +318,7 @@ export default class LocalDictPlugin extends Plugin {
 
         const word = selection
           .toString()
-          .replace(/[,*()#@!^$&*()\[\]{}，。；“”‘’！~～_]/g, " ") //去除没用的符号
+          .replace(/[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~，。！？、；：「」『』（）《》〈〉【】——……￥·～]/g, " ") //去除没用的符号
           .trim();
         // if (word) this.queryWord(word, 0, true);
 
