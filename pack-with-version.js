@@ -29,8 +29,8 @@ async function packWithVersion() {
       path.join(tempFolderInDist, "main.js")
     );
     await fs.copy(
-      path.resolve(__dirname, "package.json"),
-      path.join(tempFolderInDist, "package.json")
+      path.resolve(__dirname, "manifest.json"),
+      path.join(tempFolderInDist, "manifest.json")
     );
     await fs.copy(
       path.resolve(__dirname, "styles.css"),

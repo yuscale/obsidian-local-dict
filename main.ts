@@ -713,7 +713,7 @@ class WordView extends ItemView {
             cursor: editor.getCursor(),
           };
         }
-      })
+      }),
     );
   }
 
@@ -766,7 +766,7 @@ class WordView extends ItemView {
     copyAll.setAttr("title", "单击复制，双击追加到收集文件，右键插入光标处");
     copySummary.setAttr(
       "title",
-      "单击复制，双击追加到收集文件，右键插入光标处"
+      "单击复制，双击追加到收集文件，右键插入光标处",
     );
 
     // copyAll   copySummary.onclick = () => this.copyAll();
@@ -776,14 +776,14 @@ class WordView extends ItemView {
       copyAll,
       this.plugin,
       () => this.copyAll(), // 单击复制到剪贴板
-      () => this.handleCopyAllToFile() // 双击保存到文件（如果启用）
+      () => this.handleCopyAllToFile(), // 双击保存到文件（如果启用）
     );
 
     bindClickAndDoubleClickWithSetting(
       copySummary,
       this.plugin,
       () => this.copySummary(), // 单击复制到剪贴板
-      () => this.handleCopySummaryToFile() // 双击保存到文件（如果启用）
+      () => this.handleCopySummaryToFile(), // 双击保存到文件（如果启用）
     );
 
     copyAll.oncontextmenu = async (e) => {
@@ -894,7 +894,7 @@ class WordView extends ItemView {
           .onClick(() => {
             this.plugin.queryWord(selectedText, 0, true);
             this.inputEl.textContent = this.currentWord;
-          })
+          }),
       );
 
       // ✅ 第一项：复制选中文本（原始功能）
@@ -915,7 +915,7 @@ class WordView extends ItemView {
           .onClick(async () => {
             const success = await insertAtCursor(
               this.plugin.app,
-              "\n" + selectedText + "\n"
+              "\n" + selectedText + "\n",
             );
             if (!success) {
               new Notice("插入失败：未检测到活动 Markdown 编辑器");
@@ -937,7 +937,11 @@ class WordView extends ItemView {
               word: this.currentWord ?? "",
             });
 
-            await appendToFile( this.plugin.app, resolved, this.perseRCContent(selectedText) + "\n" );
+            await appendToFile(
+              this.plugin.app,
+              resolved,
+              this.perseRCContent(selectedText) + "\n",
+            );
             new Notice(`已追加内容到：：${resolved}`);
           });
       });
@@ -1015,7 +1019,7 @@ class WordView extends ItemView {
       this.currentWord,
       selectedText,
       this.plugin.settings.rightClickAppendToFilePrefix,
-      this.plugin.settings.rightClickAppendToFileSuffix
+      this.plugin.settings.rightClickAppendToFileSuffix,
     );
     return text;
   }
@@ -1096,7 +1100,7 @@ class WordView extends ItemView {
           // 正好删除了当前项 → 设为前一项，若无则 -1
           this.plugin.settings.currentHistoryIndex = Math.max(
             0,
-            this.plugin.settings.currentHistoryIndex - 1
+            this.plugin.settings.currentHistoryIndex - 1,
           );
           if (history.length === 0)
             this.plugin.settings.currentHistoryIndex = -1;
@@ -1151,7 +1155,7 @@ class WordView extends ItemView {
   //     this.contentElInner.innerHTML = wrapper.innerHTML;
   //   }
 
-  checkServiceStatus() {
+  checkServiceStatus0() {
     exec("wmic process get ExecutablePath", (err: any, stdout: string) => {
       const running = stdout
         .split("\n")
@@ -1159,7 +1163,7 @@ class WordView extends ItemView {
         .some(
           (path) =>
             path.toLowerCase() ===
-            this.plugin.settings.serviceExePath.toLowerCase()
+            this.plugin.settings.serviceExePath.toLowerCase(),
         );
 
       if (running) {
@@ -1185,6 +1189,81 @@ class WordView extends ItemView {
           new Notice("已尝试启动服务");
         };
       }
+    });
+  }
+
+  updateUI(isRunning: boolean) {
+    if (isRunning) {
+      this.inputEl.placeholder = "输入单词";
+      this.searchBtn.setText("搜索");
+      this.searchBtn.style.border = "";
+      this.searchBtn.style.color = "";
+
+      this.searchBtn.onclick = () => {
+        const word = this.inputEl.value.trim();
+        if (word) this.plugin.queryWord(word, 0);
+      };
+    } else {
+      this.inputEl.placeholder = "未检测到 SilverDict，请先启动";
+      this.searchBtn.setText("开启服务");
+      this.searchBtn.style.border = "1px solid red";
+      this.searchBtn.style.color = "red";
+
+      this.searchBtn.onclick = async () => {
+        this.checkServiceStatusAndStart();
+        new Notice("已尝试启动服务");
+
+        // ⬇️ 启动后延迟再检测一次
+        setTimeout(() => this.checkServiceStatus(), 2000);
+      };
+    }
+  }
+
+  checkServiceStatus() {
+    exec("tasklist", (err: any, stdout: string) => {
+      if (err) {
+        console.error("检查服务失败", err);
+        this.updateUI(false);
+        return;
+      }
+
+      const exeName = this.plugin.settings.serviceExePath
+        .split("\\")
+        .pop()
+        ?.toLowerCase();
+
+      const running = stdout.toLowerCase().includes(exeName ?? "");
+
+      this.updateUI(running);
+    });
+  }
+
+  checkServiceStatusAndStart() {
+    exec("tasklist", (err: any, stdout: string) => {
+      if (err) {
+        new Notice("检测服务状态失败");
+        return;
+      }
+
+      const exeName = this.plugin.settings.serviceExePath
+        .split("\\")
+        .pop()
+        ?.toLowerCase();
+
+      const running = stdout.toLowerCase().includes(exeName ?? "");
+
+      if (running) {
+        new Notice("服务已在运行，无需重复启动");
+        this.updateUI(true);
+        return;
+      }
+
+      // ✅ 没运行才启动
+      exec(`"${this.plugin.settings.serviceStartScript}"`);
+      new Notice("已尝试启动服务");
+
+      // ⬇️ 延迟检测（关键）
+      setTimeout(() => this.checkServiceStatus(), 2000);
     });
   }
 
@@ -1220,7 +1299,7 @@ class WordView extends ItemView {
 
   async copyAll(returnText = false): Promise<string | void> {
     const rules = parseMarkdownReplaceRules(
-      this.plugin.settings.markdownReplaceRulesAll
+      this.plugin.settings.markdownReplaceRulesAll,
     );
     if (!this.currentWord) {
       new Notice("请先查询单词");
@@ -1239,7 +1318,7 @@ class WordView extends ItemView {
       this.currentWord,
       processed,
       this.plugin.settings.copyAllPrefix,
-      this.plugin.settings.copyAllSuffix
+      this.plugin.settings.copyAllSuffix,
     );
 
     if (returnText) {
@@ -1251,7 +1330,7 @@ class WordView extends ItemView {
   }
   async copySummary(returnText = false): Promise<string | void> {
     const rules = parseMarkdownReplaceRules(
-      this.plugin.settings.markdownReplaceRulesSummary
+      this.plugin.settings.markdownReplaceRulesSummary,
     );
 
     if (!this.currentWord) {
@@ -1271,7 +1350,7 @@ class WordView extends ItemView {
       this.currentWord,
       processed,
       this.plugin.settings.copySummaryPrefix,
-      this.plugin.settings.copySummarySuffix
+      this.plugin.settings.copySummarySuffix,
     );
 
     if (returnText) {

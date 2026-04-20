@@ -55,6 +55,13 @@ npm run build
 npm run dev
 ```
 
+生成打包文件：
+
+```bash
+npm run pack
+```
+
+将在 `dist` 文件夹生成 zip 文件。
 ## 🔍 调试与开发提示
 
 - 在开发过程中，运行 `pnpm run dev` 可进入监听模式自动打包；
