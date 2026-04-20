@@ -7243,17 +7243,17 @@ class LocalDictPlugin extends obsidian.Plugin {
         });
         this.addCommand({
             id: "navigate-back",
-            name: "📘 Local Dict: Navigate Back",
+            name: "Local Dict: Navigate Back",
             callback: () => this.navigateBack(),
         });
         this.addCommand({
             id: "navigate-forward",
-            name: "📘 Local Dict: Navigate Forward",
+            name: "Local Dict: Navigate Forward",
             callback: () => this.navigateForward(),
         });
         this.addCommand({
             id: "toggle-history-panel",
-            name: "📘 Local Dict: Toggle History Panel",
+            name: "Local Dict: Toggle History Panel",
             callback: () => {
                 const view = this.view;
                 if (view?.historyContainer) {
@@ -7267,21 +7267,21 @@ class LocalDictPlugin extends obsidian.Plugin {
         });
         this.addCommand({
             id: "copy-all",
-            name: "📘 Local Dict: Copy All to Clipboard",
+            name: "Local Dict: Copy All to Clipboard",
             callback: () => {
                 this.view?.copyAll();
             },
         });
         this.addCommand({
             id: "copy-summary",
-            name: "📘 Local Dict: Copy Summary to Clipboard",
+            name: "Local Dict: Copy Summary to Clipboard",
             callback: () => {
                 this.view?.copySummary();
             },
         });
         this.addCommand({
             id: "toggle-simplified-mode",
-            name: "📘 Local Dict: Toggle Simplified View",
+            name: "Local Dict: Toggle Simplified View",
             callback: () => {
                 if (!this.view)
                     return;
@@ -7291,7 +7291,7 @@ class LocalDictPlugin extends obsidian.Plugin {
         });
         this.addCommand({
             id: "insert-selected-text",
-            name: "📘 Local Dict: Insert Selected Text at Cursor",
+            name: "Local Dict: Insert Selected Text at Cursor",
             callback: async () => {
                 const text = this.lastSelectedText?.trim();
                 if (!text) {
@@ -7306,7 +7306,7 @@ class LocalDictPlugin extends obsidian.Plugin {
         });
         this.addCommand({
             id: "append-selected-text",
-            name: "📘 Local Dict: Append Selected Text to Collection File",
+            name: "Local Dict: Append Selected Text to Collection File",
             callback: async () => {
                 const text = this.lastSelectedText?.trim();
                 if (!text) {
@@ -7329,7 +7329,7 @@ class LocalDictPlugin extends obsidian.Plugin {
         });
         this.addCommand({
             id: "copy-selected-text",
-            name: "📘 Local Dict: Copy Selected Text to Clipboard",
+            name: "Local Dict: Copy Selected Text to Clipboard",
             callback: async () => {
                 const text = this.lastSelectedText?.trim();
                 if (!text) {
@@ -7342,17 +7342,17 @@ class LocalDictPlugin extends obsidian.Plugin {
         });
         this.addCommand({
             id: "copy-all-to-log-file",
-            name: "📘 Local Dict: Copy All and Append to Log File (Double Click)",
+            name: "Local Dict: Copy All and Append to Log File (Double Click)",
             callback: () => this.view?.handleCopyAllToFile?.(),
         });
         this.addCommand({
             id: "copy-summary-to-log-file",
-            name: "📘 Local Dict: Copy Summary and Append to Log File (Double Click)",
+            name: "Local Dict: Copy Summary and Append to Log File (Double Click)",
             callback: () => this.view?.handleCopySummaryToFile?.(),
         });
         this.addCommand({
             id: "query-current-selected-word",
-            name: "📘 Local Dict: Query Current Selected Word",
+            name: "Local Dict: Query Current Selected Word",
             callback: () => {
                 if (this.view?.currentWord) {
                     this.queryWord(this.view.currentWord, 0);
@@ -7364,12 +7364,12 @@ class LocalDictPlugin extends obsidian.Plugin {
         });
         this.addCommand({
             id: "insert-copy-all-at-cursor",
-            name: "📘 Local Dict: Insert Copied All Content at Cursor (Right Click)",
+            name: "Local Dict: Insert Copied All Content at Cursor (Right Click)",
             callback: () => this.view?.handleInsertCopyAllToCursor?.(),
         });
         this.addCommand({
             id: "insert-copy-summary-at-cursor",
-            name: "📘 Local Dict: Insert Copied Summary at Cursor (Right Click)",
+            name: "Local Dict: Insert Copied Summary at Cursor (Right Click)",
             callback: () => this.view?.handleInsertCopySummaryToCursor?.(),
         });
         //  mark 双击触发。单词的输入点
@@ -7381,7 +7381,7 @@ class LocalDictPlugin extends obsidian.Plugin {
                 return;
             const word = selection
                 .toString()
-                .replace(/[,*()#@!^$&*()\[\]{}，。；“”‘’！~～_]/g, " ") //去除没用的符号
+                .replace(/[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~，。！？、；：「」『』（）《》〈〉【】——……￥·～]/g, " ") //去除没用的符号
                 .trim();
             // if (word) this.queryWord(word, 0, true);
             if (evt.ctrlKey) {
@@ -7734,11 +7734,9 @@ class WordView extends obsidian.ItemView {
         // copyAll   copySummary.onclick = () => this.copyAll();
         // copySummary.onclick = () => this.copySummary();
         bindClickAndDoubleClickWithSetting(copyAll, this.plugin, () => this.copyAll(), // 单击复制到剪贴板
-        () => this.handleCopyAllToFile() // 双击保存到文件（如果启用）
-        );
+        () => this.handleCopyAllToFile());
         bindClickAndDoubleClickWithSetting(copySummary, this.plugin, () => this.copySummary(), // 单击复制到剪贴板
-        () => this.handleCopySummaryToFile() // 双击保存到文件（如果启用）
-        );
+        () => this.handleCopySummaryToFile());
         copyAll.oncontextmenu = async (e) => {
             e.preventDefault();
             setTimeout(async () => {
@@ -8034,7 +8032,7 @@ class WordView extends obsidian.ItemView {
     //     applySimplifiedView(wrapper, this.simplified, this.plugin.settings);
     //     this.contentElInner.innerHTML = wrapper.innerHTML;
     //   }
-    checkServiceStatus() {
+    checkServiceStatus0() {
         exec("wmic process get ExecutablePath", (err, stdout) => {
             const running = stdout
                 .split("\n")
@@ -8066,6 +8064,69 @@ class WordView extends obsidian.ItemView {
                     new obsidian.Notice("已尝试启动服务");
                 };
             }
+        });
+    }
+    updateUI(isRunning) {
+        if (isRunning) {
+            this.inputEl.placeholder = "输入单词";
+            this.searchBtn.setText("搜索");
+            this.searchBtn.style.border = "";
+            this.searchBtn.style.color = "";
+            this.searchBtn.onclick = () => {
+                const word = this.inputEl.value.trim();
+                if (word)
+                    this.plugin.queryWord(word, 0);
+            };
+        }
+        else {
+            this.inputEl.placeholder = "未检测到 SilverDict，请先启动";
+            this.searchBtn.setText("开启服务");
+            this.searchBtn.style.border = "1px solid red";
+            this.searchBtn.style.color = "red";
+            this.searchBtn.onclick = async () => {
+                this.checkServiceStatusAndStart();
+                new obsidian.Notice("已尝试启动服务");
+                // ⬇️ 启动后延迟再检测一次
+                setTimeout(() => this.checkServiceStatus(), 2000);
+            };
+        }
+    }
+    checkServiceStatus() {
+        exec("tasklist", (err, stdout) => {
+            if (err) {
+                console.error("检查服务失败", err);
+                this.updateUI(false);
+                return;
+            }
+            const exeName = this.plugin.settings.serviceExePath
+                .split("\\")
+                .pop()
+                ?.toLowerCase();
+            const running = stdout.toLowerCase().includes(exeName ?? "");
+            this.updateUI(running);
+        });
+    }
+    checkServiceStatusAndStart() {
+        exec("tasklist", (err, stdout) => {
+            if (err) {
+                new obsidian.Notice("检测服务状态失败");
+                return;
+            }
+            const exeName = this.plugin.settings.serviceExePath
+                .split("\\")
+                .pop()
+                ?.toLowerCase();
+            const running = stdout.toLowerCase().includes(exeName ?? "");
+            if (running) {
+                new obsidian.Notice("服务已在运行，无需重复启动");
+                this.updateUI(true);
+                return;
+            }
+            // ✅ 没运行才启动
+            exec(`"${this.plugin.settings.serviceStartScript}"`);
+            new obsidian.Notice("已尝试启动服务");
+            // ⬇️ 延迟检测（关键）
+            setTimeout(() => this.checkServiceStatus(), 2000);
         });
     }
     async onClose() {
