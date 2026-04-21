@@ -430,7 +430,7 @@ export default class LocalDictPlugin extends Plugin {
           )
           .trim();
         if (!cleaned) return;
-        console.log("CLIPBOARD:", cleaned);
+        // console.log("CLIPBOARD:", cleaned);
 
         // note 限定在 web viewer 才进行复制查询单词。
         // 双击查询未成功。其内容获取不到。
