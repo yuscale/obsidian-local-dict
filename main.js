@@ -7200,6 +7200,10 @@ class LocalDictPlugin extends obsidian.Plugin {
     constructor() {
         super(...arguments);
         this.lastSelectedText = undefined;
+        this.lastSelection = "";
+        this.lastClipboard = "";
+        this.allowQuery = false;
+        this.allowQueryUntil = 0;
         this.view = null;
     }
     getCurrentWord() {
@@ -7397,7 +7401,83 @@ class LocalDictPlugin extends obsidian.Plugin {
                 this.queryWord(word, 0, true);
             }
         });
-    } // onload end
+        this.observeWebViewer();
+        this.startClipboardWatcher();
+    } // // onload end
+    observeWebViewer() {
+        document.addEventListener("selectionchange", () => {
+            const text = window.getSelection()?.toString()?.trim();
+            if (!text)
+                return;
+            this.allowQueryUntil = Date.now() + 800;
+            // console.log("allowQueryUntil set to:", this.allowQueryUntil);
+        });
+    }
+    observeWebViewer0() {
+        const observer = new MutationObserver(() => {
+            const container = document.querySelector(".webviewer-content");
+            if (!container)
+                return;
+            if (container._bound)
+                return;
+            container._bound = true;
+            console.log("FOUND WEB VIEWER");
+            container.addEventListener("pointerup", () => {
+                this.allowQueryUntil = Date.now() + 800;
+                console.log("allowQueryUntil set to:", this.allowQueryUntil);
+            });
+            console.log("pointerup event bound to webviewer-content");
+        });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+        });
+    }
+    observeWebViewer1() {
+        console.log("observeWebViewer started");
+        const observer = new MutationObserver(() => {
+            const all = document.querySelectorAll("*");
+            console.log("DOM check:", all.length);
+            const container = document.querySelector(".webviewer-content");
+            console.log("webviewer-content:", container);
+            if (!container)
+                return;
+            console.log("FOUND WEBVIEWER");
+            container._bound = true;
+            container.addEventListener("copy", () => {
+                console.log("WebViewer bound");
+            });
+        });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+        });
+    }
+    startClipboardWatcher() {
+        setInterval(async () => {
+            try {
+                const viewType = getActiveViewType(this.app);
+                // console.log("ACTIVE VIEW:", getActiveViewType(this.app));
+                const text = await navigator.clipboard.readText();
+                if (!text || text === this.lastClipboard)
+                    return;
+                this.lastClipboard = text;
+                const cleaned = text.replace(/[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~，。！？、；：「」『』（）《》〈〉【】——……￥·～]/g, " ")
+                    .trim();
+                if (!cleaned)
+                    return;
+                console.log("CLIPBOARD:", cleaned);
+                // note 限定在 web viewer 才进行复制查询单词。
+                // 双击查询未成功。其内容获取不到。
+                if (viewType === "webviewer") {
+                    this.queryWord(cleaned);
+                }
+            }
+            catch (e) {
+                // ignore
+            }
+        }, 500);
+    }
     /* -------------------------------------------------------------------------- */
     /*  核心整合逻辑
      *  - 使 PDF.js textLayer 可选中
@@ -7541,7 +7621,7 @@ class LocalDictPlugin extends obsidian.Plugin {
                 // console.log("[LocalDict] 未找到词条：", html);
                 // ✅ 显示空结果区域
                 const placeholder = document.createElement("div");
-                placeholder.textContent = firstLine;
+                placeholder.textContent = firstLine.slice(3, -17);
                 placeholder.style.color = "var(--text-faint)";
                 placeholder.style.padding = "10px";
                 await this.view.setContent(placeholder, word);
@@ -8665,6 +8745,10 @@ class LocalDictSettingTab extends obsidian.PluginSettingTab {
         historyBtnRow.appendChild(clearBtn);
         historyBtnRow.appendChild(exportBtn);
     } //display(): void
+}
+function getActiveViewType(app) {
+    const view = app.workspace.getActiveViewOfType(obsidian.ItemView);
+    return view?.getViewType?.() ?? null;
 }
 
 module.exports = LocalDictPlugin;

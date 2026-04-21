@@ -111,6 +111,11 @@ const DEFAULT_SETTINGS: LocalDictPluginSettings = {
 
 export default class LocalDictPlugin extends Plugin {
   lastSelectedText: string | undefined = undefined;
+  private lastSelection = "";
+  private lastClipboard = "";
+  private allowQuery = false;
+  private allowQueryUntil = 0;
+
   view: WordView | null = null;
   settings!: LocalDictPluginSettings;
 
@@ -318,7 +323,10 @@ export default class LocalDictPlugin extends Plugin {
 
         const word = selection
           .toString()
-          .replace(/[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~，。！？、；：「」『』（）《》〈〉【】——……￥·～]/g, " ") //去除没用的符号
+          .replace(
+            /[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~，。！？、；：「」『』（）《》〈〉【】——……￥·～]/g,
+            " ",
+          ) //去除没用的符号
           .trim();
         // if (word) this.queryWord(word, 0, true);
 
@@ -332,9 +340,108 @@ export default class LocalDictPlugin extends Plugin {
           if (!this.isViewActive()) return; // ✅ 新增：屏蔽未激活时的双击
           this.queryWord(word, 0, true);
         }
-      }
+      },
     );
-  } // onload end
+
+    this.observeWebViewer();
+    this.startClipboardWatcher();
+  } // // onload end
+
+  observeWebViewer() {
+    document.addEventListener("selectionchange", () => {
+      const text = window.getSelection()?.toString()?.trim();
+
+      if (!text) return;
+
+      this.allowQueryUntil = Date.now() + 800;
+
+      // console.log("allowQueryUntil set to:", this.allowQueryUntil);
+    });
+  }
+
+  observeWebViewer0() {
+    const observer = new MutationObserver(() => {
+      const container = document.querySelector(".webviewer-content");
+
+      if (!container) return;
+
+      if ((container as any)._bound) return;
+      (container as any)._bound = true;
+
+      console.log("FOUND WEB VIEWER");
+
+      container.addEventListener("pointerup", () => {
+        this.allowQueryUntil = Date.now() + 800;
+        console.log("allowQueryUntil set to:", this.allowQueryUntil);
+      });
+      console.log("pointerup event bound to webviewer-content");
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  private observeWebViewer1() {
+    console.log("observeWebViewer started");
+
+    const observer = new MutationObserver(() => {
+      const all = document.querySelectorAll("*");
+
+      console.log("DOM check:", all.length);
+
+      const container = document.querySelector(".webviewer-content");
+
+      console.log("webviewer-content:", container);
+
+      if (!container) return;
+
+      console.log("FOUND WEBVIEWER");
+
+      (container as any)._bound = true;
+
+      container.addEventListener("copy", () => {
+        console.log("WebViewer bound");
+      });
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  startClipboardWatcher() {
+    
+    setInterval(async () => {
+      try {
+        const viewType = getActiveViewType(this.app);
+        // console.log("ACTIVE VIEW:", getActiveViewType(this.app));
+        const text = await navigator.clipboard.readText();
+
+        if (!text || text === this.lastClipboard) return;
+
+        this.lastClipboard = text;
+
+        const cleaned = text.replace(
+            /[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~，。！？、；：「」『』（）《》〈〉【】——……￥·～]/g,
+            " ",
+          )
+          .trim();
+        if (!cleaned) return;
+        console.log("CLIPBOARD:", cleaned);
+
+        // note 限定在 web viewer 才进行复制查询单词。
+        // 双击查询未成功。其内容获取不到。
+        if (viewType === "webviewer") {
+          this.queryWord(cleaned);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 500);
+  }
 
   /* -------------------------------------------------------------------------- */
   /*  核心整合逻辑
@@ -346,51 +453,58 @@ export default class LocalDictPlugin extends Plugin {
    * -------------------------------------------------------------------------- */
 
   private enablePdfLookup() {
-    this.registerDomEvent(document.body, "dblclick", async (evt: MouseEvent) => {
-      const target = evt.target as HTMLElement;
+    this.registerDomEvent(
+      document.body,
+      "dblclick",
+      async (evt: MouseEvent) => {
+        const target = evt.target as HTMLElement;
 
-      // 只在 PDF 的文字层中响应
-      if (!target.closest(".textLayer")) return;
+        // 只在 PDF 的文字层中响应
+        if (!target.closest(".textLayer")) return;
 
-      let word = "";
+        let word = "";
 
-      // 1. 优先尝试获取用户手动选中的词
-      const sel = window.getSelection();
-      if (sel && !sel.isCollapsed) {
-        word = sel.toString().trim();
-      }
+        // 1. 优先尝试获取用户手动选中的词
+        const sel = window.getSelection();
+        if (sel && !sel.isCollapsed) {
+          word = sel.toString().trim();
+        }
 
-      // 2. 如果未能获取选中词（如双击失败），尝试手动提取
-      if (!word) {
-        const range =
-          document.caretRangeFromPoint?.(evt.clientX, evt.clientY) ??
-          (document as any).caretPositionFromPoint?.(evt.clientX, evt.clientY);
+        // 2. 如果未能获取选中词（如双击失败），尝试手动提取
+        if (!word) {
+          const range =
+            document.caretRangeFromPoint?.(evt.clientX, evt.clientY) ??
+            (document as any).caretPositionFromPoint?.(
+              evt.clientX,
+              evt.clientY,
+            );
 
-        if (range) {
-          const node = (range as any).startContainer;
-          if (node?.textContent) {
-            const offset = (range as any).startOffset;
-            word = this.extractWordAround(node.textContent, offset);
+          if (range) {
+            const node = (range as any).startContainer;
+            if (node?.textContent) {
+              const offset = (range as any).startOffset;
+              word = this.extractWordAround(node.textContent, offset);
+            }
           }
         }
-      }
 
-      // 3. 清洗提取到的内容，去除符号
-      word = word.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-      if (!word) return;
+        // 3. 清洗提取到的内容，去除符号
+        word = word.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+        if (!word) return;
 
-      // 4. Ctrl + 双击：强制打开面板 + 查词
-      if (evt.ctrlKey) {
-        await this.activateLocalDictView();
-        this.queryWord(word, 0, true);
-        return;
-      }
+        // 4. Ctrl + 双击：强制打开面板 + 查词
+        if (evt.ctrlKey) {
+          await this.activateLocalDictView();
+          this.queryWord(word, 0, true);
+          return;
+        }
 
-      // 5. 普通双击，仅当面板已展开时才查词
-      if (this.isViewActive()) {
-        this.queryWord(word, 0, true);
-      }
-    });
+        // 5. 普通双击，仅当面板已展开时才查词
+        if (this.isViewActive()) {
+          this.queryWord(word, 0, true);
+        }
+      },
+    );
   }
 
   // ⬇️ 辅助函数：从 offset 处提取完整单词
@@ -404,9 +518,6 @@ export default class LocalDictPlugin extends Plugin {
 
     return text.slice(start, end);
   }
-
-
-
 
   async saveSettings() {
     await this.saveData(this.settings);
@@ -477,7 +588,7 @@ export default class LocalDictPlugin extends Plugin {
     this.view?.setContent(
       `<p style="text-align:center;
                 color:var(--text-muted);margin-top:1.em;">🔍 正在查询：${word}</p>`,
-      word
+      word,
     );
 
     if (!this.view || depth > 2) return;
@@ -509,7 +620,7 @@ export default class LocalDictPlugin extends Plugin {
         // console.log("[LocalDict] 未找到词条：", html);
         // ✅ 显示空结果区域
         const placeholder = document.createElement("div");
-        placeholder.textContent = firstLine;
+        placeholder.textContent = firstLine.slice(3, -17);
         placeholder.style.color = "var(--text-faint)";
         placeholder.style.padding = "10px";
         await this.view.setContent(placeholder, word);
@@ -520,7 +631,7 @@ export default class LocalDictPlugin extends Plugin {
       // ✅ 移除 style 标签
       const doc = new DOMParser().parseFromString(
         removeStyleTags(html),
-        "text/html"
+        "text/html",
       );
 
       // ✅ 标签替换规则
@@ -621,7 +732,7 @@ export default class LocalDictPlugin extends Plugin {
     if (this.settings.currentHistoryIndex < this.settings.history.length - 1) {
       this.settings.history = this.settings.history.slice(
         0,
-        this.settings.currentHistoryIndex + 1
+        this.settings.currentHistoryIndex + 1,
       );
     }
 
@@ -634,7 +745,7 @@ export default class LocalDictPlugin extends Plugin {
 
     // 删除已有的相同词项（忽略大小写，避免重复）
     this.settings.history = this.settings.history.filter(
-      (h) => h.word.toLowerCase() !== trimmedLower
+      (h) => h.word.toLowerCase() !== trimmedLower,
     );
 
     // 添加新项
@@ -1470,7 +1581,7 @@ class LocalDictSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.serviceExePath = value.trim();
             await this.plugin.saveData(this.plugin.settings);
-          })
+          }),
       );
 
     new Setting(containerEl)
@@ -1483,7 +1594,7 @@ class LocalDictSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.serviceStartScript = value.trim();
             await this.plugin.saveData(this.plugin.settings);
-          })
+          }),
       );
 
     new Setting(containerEl)
@@ -1493,7 +1604,7 @@ class LocalDictSettingTab extends PluginSettingTab {
           "本地查询接口 API 的 URL，`{word}` 为要查寻的单词。",
           "例如：http://localhost:2628/api/query/Default Group/{word}",
           "现确认在浏览器内能正常使用。",
-        ])
+        ]),
       )
       .addText((text) => {
         text
@@ -1542,7 +1653,7 @@ class LocalDictSettingTab extends PluginSettingTab {
               this.plugin.settings.doubleClickDelay = num;
               await this.plugin.saveSettings();
             }
-          })
+          }),
       );
 
     containerEl.createEl("h4", { text: "词典数据收集设置" });
@@ -1553,7 +1664,7 @@ class LocalDictSettingTab extends PluginSettingTab {
         "支持 moment 格式化字符串。",
         "`Collected/{{YYYY-MM-DD}}.md` ➜ 将内容追加到在 Collected 文件夹中的当天日期文件中。",
         "`Collected/{{word}}.md` ➜ 在 Collected 文件夹中生成以当前单词为文件名的笔记。",
-      ])
+      ]),
     );
 
     new Setting(containerEl)
@@ -1624,7 +1735,7 @@ class LocalDictSettingTab extends PluginSettingTab {
           "  ,div              // 替换所有元素为 div",
           "  span.note,p       // 替换 span.note 为 p",
           "  .warn,.notice     // 替换所有 .warn 类元素为 .notice",
-        ])
+        ]),
       )
       .addTextArea((text) => {
         text
@@ -1648,7 +1759,7 @@ class LocalDictSettingTab extends PluginSettingTab {
         buildMultilineDesc([
           "这些元素在显示全部和简略时都会被隐藏。",
           "每行一个 CSS 选择器。",
-        ])
+        ]),
       )
       .addTextArea((text) => {
         text
@@ -1692,12 +1803,12 @@ class LocalDictSettingTab extends PluginSettingTab {
           "1. `.entry, .ure` 表示保留 `.entry` 内的 `.ure` 元素",
           "2. `.example, span.note` 表示保留 `.example` 中的 `span.note`",
           "3. `.highlight` 表示同时为父子选择器，保留该类元素",
-        ])
+        ]),
       )
       .addTextArea((text) => {
         text
           .setPlaceholder(
-            `示例：\n.entry，.ure\n.example, span.note\n.highlight`
+            `示例：\n.entry，.ure\n.example, span.note\n.highlight`,
           )
           .setValue(this.plugin.settings.simplifiedShowInHiddenSelectors)
           .onChange(async (value) => {
@@ -1735,7 +1846,7 @@ class LocalDictSettingTab extends PluginSettingTab {
           "/\\*\\*\\n/g,** ",
           "/\\n### /g,\\n#### ",
           "/\\n+$/g,\\n\\n",
-        ])
+        ]),
       );
 
     // ✅ 输入框：复制全部
@@ -1784,7 +1895,7 @@ class LocalDictSettingTab extends PluginSettingTab {
           "- 前缀：`## {{word}} \\n【查询时间：{{YYYY-MM-DD HH:mm}}】`",
           "- 后缀：`\\n---\\n来自本地词典`",
           "如果不需要前缀或后缀，可以留空。",
-        ])
+        ]),
       );
 
     // ✅ 自定义“细”分隔线（替代 <hr>）
@@ -1798,7 +1909,7 @@ class LocalDictSettingTab extends PluginSettingTab {
       prefixName: string,
       prefixKey: StringKeys<LocalDictPluginSettings>,
       suffixName: string,
-      suffixKey: StringKeys<LocalDictPluginSettings>
+      suffixKey: StringKeys<LocalDictPluginSettings>,
     ) => {
       const row = parent.createDiv({ cls: "local-dict-template-row" });
       row.style.display = "flex";
@@ -1849,7 +1960,7 @@ class LocalDictSettingTab extends PluginSettingTab {
       "复制简略内容 - 前缀",
       "copySummaryPrefix",
       "复制简略内容 - 后缀",
-      "copySummarySuffix"
+      "copySummarySuffix",
     );
 
     // ✅ 全部内容设置（前缀 + 后缀）
@@ -1859,14 +1970,14 @@ class LocalDictSettingTab extends PluginSettingTab {
       "复制全部内容 - 前缀",
       "copyAllPrefix",
       "复制全部内容 - 后缀",
-      "copyAllSuffix"
+      "copyAllSuffix",
     );
 
     // ✅ 自定义“细”分隔线（替代 <hr>）
     const divid2 = containerEl.createEl("div");
     divid2.style.borderTop = "1px solid var(--background-modifier-border)";
     divid2.style.margin = "1em 0";
-    
+
     // ✅ 右键收集文件设置（前缀 + 后缀）
     buildRow.call(
       this,
@@ -1874,7 +1985,7 @@ class LocalDictSettingTab extends PluginSettingTab {
       "追加到收集文件 - 前缀",
       "rightClickAppendToFilePrefix",
       "追加到收集文件 - 后缀",
-      "rightClickAppendToFileSuffix"
+      "rightClickAppendToFileSuffix",
     );
 
     // 输出时在前后添加自定义文本，支持moment   🔼
@@ -1918,7 +2029,7 @@ class LocalDictSettingTab extends PluginSettingTab {
     exportBtn.style.marginLeft = "8px";
     exportBtn.onclick = () => {
       const lines = this.plugin.settings.history.map(
-        (entry) => `${entry.word}, ${entry.time}`
+        (entry) => `${entry.word}, ${entry.time}`,
       );
       const blob = new Blob([lines.join("\n")], {
         type: "text/plain;charset=utf-8",
@@ -1948,4 +2059,9 @@ class LocalDictSettingTab extends PluginSettingTab {
     historyBtnRow.appendChild(clearBtn);
     historyBtnRow.appendChild(exportBtn);
   } //display(): void
+}
+
+function getActiveViewType(app: App): string | null {
+  const view = app.workspace.getActiveViewOfType(ItemView);
+  return view?.getViewType?.() ?? null;
 }
