@@ -15,10 +15,97 @@
   "simplifiedHideSelectors": ".bc\n.def_text\n.sd\n//例句\n.vis_w\n.un_text\n//名词 noncount\n.sense .sgram\n.sense .wsgram\n// 派生词\n.uro_line .gram\n.both_text",
   "simplifiedShowInHiddenSelectors": ".un_text,.mw_zh\n.uro .vis_w, .vis\n.both_text, .mw_zh",
   "history": [
-   
+    {
+      "word": "million",
+      "time": "20260422 091902"
+    },
+    {
+      "word": "const webview   document querySelector  webview   \nif  webview   \n    webview  executeJavaScript    console log  Hello from code",
+      "time": "20260422 092507"
+    },
+    {
+      "word": "should",
+      "time": "20260422 092605"
+    },
+    {
+      "word": "const webview   document querySelector  webview   \r\nwebview openDevTools",
+      "time": "20260422 092659"
+    },
+    {
+      "word": "uneconomic",
+      "time": "20260422 095546"
+    },
+    {
+      "word": "sentence",
+      "time": "20260422 100508"
+    },
+    {
+      "word": "much",
+      "time": "20260422 100512"
+    },
+    {
+      "word": "spoken",
+      "time": "20260422 100531"
+    },
+    {
+      "word": "English",
+      "time": "20260422 100533"
+    },
+    {
+      "word": "have",
+      "time": "20260422 100540"
+    },
+    {
+      "word": "proprietary",
+      "time": "20260422 101147"
+    },
+    {
+      "word": "because",
+      "time": "20260422 101157"
+    },
+    {
+      "word": "injury",
+      "time": "20260422 101201"
+    },
+    {
+      "word": "personals",
+      "time": "20260422 103521"
+    },
+    {
+      "word": "highlight",
+      "time": "20260422 105434"
+    },
+    {
+      "word": "management",
+      "time": "20260422 110239"
+    },
+    {
+      "word": "comprehensive",
+      "time": "20260422 110244"
+    },
+    {
+      "word": "Obsidian",
+      "time": "20260422 110342"
+    },
+    {
+      "word": "knowledge",
+      "time": "20260422 110344"
+    },
+    {
+      "word": "different",
+      "time": "20260422 111713"
+    },
+    {
+      "word": "automatic",
+      "time": "20260422 111718"
+    },
+    {
+      "word": "Combine",
+      "time": "20260422 111913"
+    }
   ],
   "maxHistory": 500,
-  "currentHistoryIndex": 0,
+  "currentHistoryIndex": 21,
   "copyAllLogPath": "all.md",
   "copySummaryLogPath": "daily/{{YYYYMMDD}}.md",
   "contextMenuLogPath": "",

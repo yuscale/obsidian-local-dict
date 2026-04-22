@@ -7200,10 +7200,10 @@ class LocalDictPlugin extends obsidian.Plugin {
     constructor() {
         super(...arguments);
         this.lastSelectedText = undefined;
-        this.lastSelection = "";
         this.lastClipboard = "";
         this.allowQuery = false;
         this.allowQueryUntil = 0;
+        this.word_copied = "";
         this.view = null;
     }
     getCurrentWord() {
@@ -7401,9 +7401,612 @@ class LocalDictPlugin extends obsidian.Plugin {
                 this.queryWord(word, 0, true);
             }
         });
-        this.observeWebViewer();
-        this.startClipboardWatcher();
+        // this.observeWebViewer();           // 必须使用 Ctrl + C 复制的流程  这0.26
+        // this.startClipboardWatcher();      // 必须使用 Ctrl + C 复制的流程  这0.26
+        /*     // 监听 Obsidian 布局变化，这样新打开的 webview 也能被捕获
+        this.registerEvent(
+          this.app.workspace.on("layout-change", () => {
+            // 给 100ms 缓冲，让该销毁的销毁干净
+            setTimeout(() => this.initWebviewListener(), 100);
+          }),
+        );
+    
+        // 初始执行一次
+        this.app.workspace.onLayoutReady(() => {
+          this.initWebviewListener();
+        }); */
+        this.copyFromWebviewer();
     } // // onload end
+    initWebviewListener0() {
+        // 1. 缩小范围：只在活动的叶子节点（Leaf）中寻找，避免扫描到后台已关闭但未清理的残余
+        const activeView = this.app.workspace.getActiveViewOfType(obsidian.View);
+        if (!activeView)
+            return;
+        const webviews = activeView.containerEl.querySelectorAll("webview");
+        if (webviews.length === 0)
+            return;
+        // 1. 获取所有 webview，而不仅仅是第一个
+        // const webviews = document.querySelectorAll("webview");
+        if (webviews.length === 0)
+            return;
+        webviews.forEach((el) => {
+            // 1. 核心防御：检查 webview 是否已经销毁
+            // 如果 webview 正在关闭过程中，访问它会直接崩溃
+            try {
+                if (el.isDestroyed && el.isDestroyed())
+                    return;
+            }
+            catch (e) {
+                return; // 捕获“Object has been destroyed”异常
+            }
+            // 2. 防止重复绑定监听器（通过自定义标记）
+            if (el.dataset.obsidianBound)
+                return;
+            el.dataset.obsidianBound = "true";
+            // 3. 使用安全的消息监听
+            const handleConsoleMessage = (e) => {
+                // 每次处理消息前再次检查元素是否存在
+                if (!el || !el.parentNode) {
+                    el.removeEventListener("console-message", handleConsoleMessage);
+                    return;
+                }
+                const msg = e.message;
+                if (msg.startsWith("OBSIDIAN_PAYLOAD:")) {
+                    const word = msg.replace("OBSIDIAN_PAYLOAD:", "");
+                    this.word_copied = word;
+                    // 建议使用 try-catch 包裹业务逻辑，防止 viewType 获取失败导致中断
+                    try {
+                        const viewType = getActiveViewType(this.app);
+                        if (viewType === "webviewer") {
+                            this.queryWord(this.word_copied);
+                        }
+                    }
+                    catch (err) {
+                        console.log("视图状态异常，跳过查询");
+                    }
+                }
+            };
+            el.addEventListener("console-message", handleConsoleMessage);
+            // 4. 注入双击脚本
+            const inject = () => {
+                // 注入前最后一次检查
+                try {
+                    if (el.isDestroyed())
+                        return;
+                    el.executeJavaScript(`
+                    if (!window.hasObsidianListener) {
+                        document.addEventListener('dblclick', () => {
+                            const text = window.getSelection().toString().trim();
+                            if (text) console.log("OBSIDIAN_PAYLOAD:" + text);
+                        });
+                        window.hasObsidianListener = true;
+                    }
+                `);
+                }
+                catch (e) {
+                    console.log("Webview 在注入前已关闭");
+                }
+            };
+            if (el.isLoading()) {
+                el.addEventListener("dom-ready", inject, { once: true });
+            }
+            else {
+                inject();
+            }
+        });
+    }
+    initWebviewListener00() {
+        // 1. 缩小范围：只在活动的叶子节点（Leaf）中寻找，避免扫描到后台已关闭但未清理的残余
+        const activeView = this.app.workspace.getActiveViewOfType(obsidian.View);
+        if (!activeView)
+            return;
+        const webviews = activeView.containerEl.querySelectorAll("webview");
+        if (webviews.length === 0)
+            return;
+        webviews.forEach((el) => {
+            // 2. 检查 Webview 是否真的“活着”
+            // 增加对 parentNode 的检查，确保它还在当前的 DOM 树上
+            if (!el || !el.parentNode || !document.body.contains(el)) {
+                return;
+            }
+            try {
+                // 如果已经被标记为销毁，直接跳过
+                if (typeof el.isDestroyed === "function" && el.isDestroyed())
+                    return;
+            }
+            catch (e) {
+                return; // 捕获“Object has been destroyed”
+            }
+            // 3. 防止重复绑定
+            if (el.dataset.obsidianBound === "true")
+                return;
+            // 4. 执行绑定逻辑
+            try {
+                console.log("【Obsidian】正在绑定存活的 webview...");
+                // 绑定消息监听
+                el.addEventListener("console-message", (e) => {
+                    const msg = e.message;
+                    if (msg.startsWith("OBSIDIAN_PAYLOAD:")) {
+                        const word = msg.replace("OBSIDIAN_PAYLOAD:", "");
+                        this.word_copied = word;
+                        this.queryWord(this.word_copied);
+                    }
+                });
+                // 定义注入函数
+                const inject = () => {
+                    try {
+                        // 在真正执行 JS 注入前做最后一次存活检查
+                        if (el && !el.isDestroyed()) {
+                            el.executeJavaScript(`
+                            if (!window.hasObsidianListener) {
+                                document.addEventListener('dblclick', () => {
+                                    const text = window.getSelection().toString().trim();
+                                    if (text) console.log("OBSIDIAN_PAYLOAD:" + text);
+                                });
+                                window.hasObsidianListener = true;
+                            }
+                        `);
+                            el.dataset.obsidianBound = "true"; // 只有成功注入指令才标记
+                        }
+                    }
+                    catch (e) {
+                        // 忽略此处报错，因为这说明 Webview 瞬间被关闭了
+                    }
+                };
+                if (el.isLoading()) {
+                    el.addEventListener("dom-ready", inject, { once: true });
+                }
+                else {
+                    inject();
+                }
+            }
+            catch (err) {
+                console.log("【Obsidian】绑定过程出错，可能元素已失效");
+            }
+        });
+    }
+    initWebviewListener000() {
+        // 增加延迟，避开侧边栏打开时的 DOM 剧烈变动期
+        setTimeout(() => {
+            const activeView = this.app.workspace.getActiveViewOfType(obsidian.View);
+            if (!activeView) {
+                console.log("【Obsidian】未发现活动视图，跳过。");
+                return;
+            }
+            // 尝试从当前活动视图或全局寻找 webview
+            const webviews = document.querySelectorAll("webview");
+            webviews.forEach((el) => {
+                // 存活检查
+                try {
+                    if (!el || !el.parentNode || (el.isDestroyed && el.isDestroyed()))
+                        return;
+                }
+                catch (e) {
+                    return;
+                }
+                // 检查是否已经绑定
+                if (el.dataset.obsidianBound === "true") {
+                    // console.log("【Obsidian】Webview 已绑定，跳过。");
+                    return;
+                }
+                console.log("【Obsidian】正在为 Webview 绑定监听器并尝试注入...");
+                // 1. 绑定日志捕获（这是通信的关键）
+                el.addEventListener("console-message", (e) => {
+                    const msg = e.message;
+                    // 增加一个简单的日志，看看 webview 里面到底发出来没
+                    if (msg.includes("OBSIDIAN_PAYLOAD")) {
+                        console.log("【Obsidian】监听到 Payload 原始信息:", msg);
+                    }
+                    if (msg.startsWith("OBSIDIAN_PAYLOAD:")) {
+                        const word = msg.replace("OBSIDIAN_PAYLOAD:", "");
+                        this.word_copied = word;
+                        console.log("【Obsidian】即将执行查询程序，单词:", word);
+                        // 执行查询（这里可能会触发侧边栏）
+                        this.queryWord(this.word_copied);
+                    }
+                });
+                // 2. 注入双击逻辑
+                const injectLogic = () => {
+                    try {
+                        if (el.isDestroyed())
+                            return;
+                        // 标记为已绑定，防止 layout-change 再次进入
+                        el.dataset.obsidianBound = "true";
+                        el.executeJavaScript(`
+                        (function() {
+                            // 即使页面刷新，也要确保逻辑存在
+                            document.removeEventListener('dblclick', window._obsidianHandler);
+                            window._obsidianHandler = () => {
+                                const text = window.getSelection().toString().trim();
+                                if (text) {
+                                    console.log("OBSIDIAN_PAYLOAD:" + text);
+                                }
+                            };
+                            document.addEventListener('dblclick', window._obsidianHandler);
+                            window.hasObsidianListener = true;
+                            console.log("【Webview内】双击监听已就绪，尝试双击一个词。");
+                        })();
+                    `)
+                            .then(() => {
+                            console.log("【Obsidian】注入脚本指令发送成功。");
+                        })
+                            .catch((err) => {
+                            console.error("【Obsidian】注入脚本失败:", err);
+                            el.dataset.obsidianBound = "false"; // 失败了就允许下次重试
+                        });
+                    }
+                    catch (e) {
+                        console.log("【Obsidian】注入时 Webview 已消失");
+                    }
+                };
+                // 3. 确保在正确的时机注入
+                if (el.isLoading()) {
+                    console.log("【Obsidian】Webview 还在加载，等待 dom-ready...");
+                    el.addEventListener("dom-ready", injectLogic, { once: true });
+                }
+                else {
+                    injectLogic();
+                }
+            });
+        }, 200); // 200ms 的缓冲足以避开大部分侧边栏引起的布局抖动
+    }
+    copyFromWebviewer() {
+        // 如果已经有观察器在运行，先停掉，防止多重绑定
+        if (this.observer)
+            this.observer.disconnect();
+        this.observer = new MutationObserver((mutations) => {
+            const webviews = document.querySelectorAll("webview");
+            webviews.forEach((el) => {
+                // 存活及绑定检查
+                try {
+                    if (!el || !el.parentNode || (el.isDestroyed && el.isDestroyed()))
+                        return;
+                    if (el.dataset.obsidianBound === "true")
+                        return;
+                }
+                catch (e) {
+                    return;
+                }
+                this.setupSpecificWebview(el);
+            });
+        });
+        // 开始观察整个文档的 DOM 变动
+        this.observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+        });
+        // 初始执行一次，处理当前已存在的 webview
+        const existing = document.querySelectorAll("webview");
+        existing.forEach((el) => this.setupSpecificWebview(el));
+    }
+    setupSpecificWebview0(el) {
+        el.dataset.obsidianBound = "true";
+        console.log("【Obsidian】发现活跃 Webview，正在绑定...");
+        // 1. 监听消息
+        el.addEventListener("console-message", (e) => {
+            const msg = e.message;
+            if (msg.startsWith("OBSIDIAN_PAYLOAD:")) {
+                const word = msg.replace("OBSIDIAN_PAYLOAD:", "");
+                this.word_copied = word;
+                console.log("【Obsidian】收到单词:", word);
+                this.queryWord(word);
+            }
+        });
+        // 2. 注入逻辑的闭包
+        const doInject = () => {
+            try {
+                if (el.isDestroyed())
+                    return;
+                el.executeJavaScript(`
+                (function() {
+                    console.log("【Webview内】开始尝试绑定双击...");
+                    document.removeEventListener('dblclick', window._obsidianHandler);
+                    window._obsidianHandler = () => {
+                        const text = window.getSelection().toString().trim();
+                        if (text) console.log("OBSIDIAN_PAYLOAD:" + text);
+                    };
+                    document.addEventListener('dblclick', window._obsidianHandler);
+                    console.log("【Webview内】双击监听已就绪");
+                })();
+            `)
+                    .then(() => console.log("【Obsidian】脚本注入指令已送达"))
+                    .catch((err) => {
+                    el.dataset.obsidianBound = "false";
+                    console.error("【Obsidian】注入失败:", err);
+                });
+            }
+            catch (e) {
+                el.dataset.obsidianBound = "false";
+            }
+        };
+        // 3. 核心：处理加载状态
+        if (el.isLoading()) {
+            // 如果正在加载，必须等加载完
+            el.addEventListener("dom-ready", () => {
+                // 稍微延迟，确保渲染进程上下文已稳固
+                setTimeout(doInject, 300);
+            }, { once: true });
+        }
+        else {
+            // 如果已经加载完了，直接注入
+            doInject();
+        }
+    }
+    setupSpecificWebview00(el) {
+        // 1. 基础消息监听（这个可以立即绑定，通常不会报错）
+        if (!el.dataset.obsidianBound) {
+            el.addEventListener("console-message", (e) => {
+                const msg = e.message;
+                if (msg.startsWith("OBSIDIAN_PAYLOAD:")) {
+                    const word = msg.replace("OBSIDIAN_PAYLOAD:", "");
+                    this.word_copied = word;
+                    this.queryWord(word);
+                }
+            });
+        }
+        // 2. 定义一个顽固的注入函数
+        const tryInject = (retries = 5) => {
+            if (retries <= 0) {
+                console.error("【Obsidian】多次尝试注入失败，放弃。");
+                return;
+            }
+            try {
+                // 检查：必须在 DOM 中且没有被销毁
+                if (!el || !el.parentNode || (el.isDestroyed && el.isDestroyed()))
+                    return;
+                el.executeJavaScript(`
+                (function() {
+                    document.removeEventListener('dblclick', window._obsidianHandler);
+                    window._obsidianHandler = () => {
+                        const text = window.getSelection().toString().trim();
+                        if (text) console.log("OBSIDIAN_PAYLOAD:" + text);
+                    };
+                    document.addEventListener('dblclick', window._obsidianHandler);
+                    console.log("【Webview内】注入成功");
+                })();
+            `)
+                    .then(() => {
+                    el.dataset.obsidianBound = "true";
+                    console.log("【Obsidian】脚本注入成功");
+                })
+                    .catch((err) => {
+                    // 如果报错提示 "must be attached to the DOM"，延迟重试
+                    console.warn(`【Obsidian】注入环境未就绪，剩余重试次数: ${retries - 1}`);
+                    setTimeout(() => tryInject(retries - 1), 500);
+                });
+            }
+            catch (e) {
+                // 如果 executeJavaScript 直接抛出同步异常
+                setTimeout(() => tryInject(retries - 1), 500);
+            }
+        };
+        // 3. 决定何时启动注入
+        if (el.isLoading()) {
+            el.addEventListener("dom-ready", () => tryInject(), { once: true });
+        }
+        else {
+            // 哪怕没在加载，也给 300ms 缓冲，避开该死的 "not attached" 报错
+            setTimeout(() => tryInject(), 300);
+        }
+    }
+    setupSpecificWebview(el) {
+        // 1. 严格的可见性与归属检查
+        const isVisible = el.offsetWidth > 0 && el.offsetHeight > 0;
+        if (!isVisible || !document.body.contains(el))
+            return;
+        // 2. 状态锁
+        if (el.dataset.obsidianBound === "true" ||
+            el.dataset.obsidianBinding === "true")
+            return;
+        el.dataset.obsidianBinding = "true";
+        console.log("【Local-dict】发现活跃 Webview，准备接入...");
+        // 3. 消息监听 (无论注入是否成功，先挂载监听)
+        if (!el._hasCMLite) {
+            // 防止重复添加原生监听
+            el.addEventListener("console-message", (e) => {
+                const msg = e.message;
+                if (msg.startsWith("OBSIDIAN_PAYLOAD:")) {
+                    const word = msg.replace("OBSIDIAN_PAYLOAD:", "");
+                    this.word_copied = word;
+                    if (Date.now() - this.lastQueryTime < 500)
+                        return;
+                    this.lastQueryTime = Date.now();
+                    this.queryWord(word);
+                }
+            });
+            el._hasCMLite = true;
+        }
+        // 4. 递归重试函数 (柔性注入)
+        const secureInject = (attempt = 1) => {
+            // 检查环境是否依然存活
+            if (!el || !el.parentNode || (el.isDestroyed && el.isDestroyed())) {
+                el.dataset.obsidianBinding = "false";
+                return;
+            }
+            el.executeJavaScript(`
+            (function() {
+                if (window._obsidianHandler) return "EXIST";
+                window._obsidianHandler = () => {
+                    const text = window.getSelection().toString().trim();
+                    if (text) console.log("OBSIDIAN_PAYLOAD:" + text);
+                };
+                document.addEventListener('dblclick', window._obsidianHandler);
+                return "OK";
+            })();
+        `)
+                .then((res) => {
+                el.dataset.obsidianBound = "true";
+                el.dataset.obsidianBinding = "false";
+                console.log(`【Local-dict】注入成功 (尝试次数: ${attempt})`);
+            })
+                .catch((err) => {
+                // 如果报错包含 "must be attached"，说明 Electron 还没准备好
+                if (err.message.includes("attached") ||
+                    err.message.includes("emitted")) {
+                    if (attempt < 10) {
+                        // 最多尝试 10 次，覆盖约 5 秒的时长
+                        setTimeout(() => secureInject(attempt + 1), 500);
+                    }
+                    else {
+                        el.dataset.obsidianBinding = "false";
+                        console.warn("【Local-dict】Webview 挂载超时，请尝试重新切换该视图");
+                    }
+                }
+                else {
+                    el.dataset.obsidianBinding = "false";
+                    console.error("【Local-dict】注入发生非环境错误:", err);
+                }
+            });
+        };
+        // 5. 延迟启动：给 Obsidian 侧边栏动画留出时间
+        // 侧边栏展开通常有 200-300ms 动画，Electron 在动画期间可能无法初始化 webview
+        setTimeout(() => secureInject(), 500);
+    }
+    copyFromWebviewer0() {
+        const webview = document.querySelector("webview");
+        if (webview instanceof HTMLElement) {
+            webview.addEventListener("dom-ready", () => {
+                // webview.executeJavaScript(injectionScript);
+            });
+        }
+        console.log("word_copied: " + this.word_copied);
+    }
+    copyFromWebviewer00() {
+        const webview = document.querySelector("webview");
+        if (!webview)
+            return;
+        const injectionScript = `
+    (function() {
+        // 移除旧监听器防止重复绑定（如果该函数会被多次调用）
+        document.removeEventListener('dblclick', window._obsidianDblClickHandler);
+        
+        window._obsidianDblClickHandler = () => {
+            const selectedText = window.getSelection().toString().trim();
+            if (selectedText.length > 0) {
+                document.execCommand('copy');
+                // 发送给宿主 (Obsidian)
+                window.sendToHost('word_copied_event', selectedText);
+            }
+        };
+        
+        document.addEventListener('dblclick', window._obsidianDblClickHandler);
+        console.log('注入成功：双击监听已就绪');
+    })();
+    `;
+        // 1. 监听来自 webview 内部的消息
+        webview.addEventListener("ipc-message", (event) => {
+            if (event.channel === "word_copied_event") {
+                const copiedText = event.args[0];
+                this.word_copied = copiedText; // 成功存入变量
+                console.log("Obsidian 收到已复制内容: " + this.word_copied);
+                // 如果你想在 Obsidian 界面给个反馈
+                new obsidian.Notice("已存入变量: " + copiedText);
+            }
+        });
+        // 2. 注入脚本
+        // 如果 webview 已经加载好了，直接注入；否则等 dom-ready
+        const runInjection = () => {
+            webview
+                .executeJavaScript(injectionScript)
+                .then(() => console.log("脚本注入指令已发送"));
+        };
+        if (webview.isLoading()) {
+            // 检查是否正在加载
+            webview.addEventListener("dom-ready", runInjection, { once: true });
+        }
+        else {
+            runInjection();
+        }
+    }
+    // ------------
+    copyFromWebviewer000() {
+        const webview = document.querySelector("webview");
+        // 检查点 1: 元素是否存在
+        if (!webview) {
+            console.error("【Obsidian】找不到 webview 元素！可能视图未打开。");
+            return;
+        }
+        console.log("【Obsidian】成功锁定 webview 元素");
+        // 检查点 3: 注入逻辑
+        const inject = () => {
+            console.log("【Obsidian】正在尝试注入脚本...");
+            webview
+                .executeJavaScript(`
+          document.addEventListener('dblclick', () => {
+              const text = window.getSelection().toString().trim();
+              if (text) {
+                  // 故意发一个特定格式的 log
+                  console.log("OBSIDIAN_PAYLOAD:" + text);
+              }
+            });
+          `)
+                .then(() => {
+                console.log("【Obsidian】executeJavaScript 指令已成功发出");
+            })
+                .catch((err) => {
+                console.error("【Obsidian】注入脚本失败:", err);
+            });
+        };
+        // 2. Obsidian 外部代码
+        webview.addEventListener("console-message", (e) => {
+            const msg = e.message;
+            if (msg.startsWith("OBSIDIAN_PAYLOAD:")) {
+                this.word_copied = msg.replace("OBSIDIAN_PAYLOAD:", "");
+                console.log("通过 Log 劫持获取到:", this.word_copied);
+            }
+        });
+        // 关键：如果 webview 还没加载完，inject 是没用的
+        if (webview.isLoading()) {
+            webview.addEventListener("dom-ready", inject, { once: true });
+        }
+        else {
+            inject();
+        }
+    }
+    copyFromWebviewer9() {
+        const webview = document.querySelector("webview");
+        if (!webview) {
+            console.error("【Obsidian】找不到 webview 元素");
+            return;
+        }
+        // --- 核心修改：在监听器内部执行查询 ---
+        webview.addEventListener("console-message", (e) => {
+            const msg = e.message;
+            if (msg.startsWith("OBSIDIAN_PAYLOAD:")) {
+                const word = msg.replace("OBSIDIAN_PAYLOAD:", "");
+                this.word_copied = word;
+                console.log("【Obsidian】捕获到单词:", this.word_copied);
+                // 1. 获取当前视图类型进行二次确认
+                const viewType = getActiveViewType(this.app);
+                console.log("【Obsidian】触发环境视图类型:", viewType);
+                // 2. 执行查询逻辑
+                if (viewType === "webviewer") {
+                    console.log("【Obsidian】确认处于 Webviewer，开始查询:", this.word_copied);
+                    this.queryWord(this.word_copied);
+                }
+            }
+        });
+        const inject = () => {
+            webview.executeJavaScript(`
+            // 增加一个防抖或检查，确保不会重复绑定
+            if (!window.hasObsidianListener) {
+                document.addEventListener('dblclick', () => {
+                    const text = window.getSelection().toString().trim();
+                    if (text) {
+                        console.log("OBSIDIAN_PAYLOAD:" + text);
+                    }
+                });
+                window.hasObsidianListener = true;
+            }
+        `);
+        };
+        if (webview.isLoading()) {
+            webview.addEventListener("dom-ready", inject, { once: true });
+        }
+        else {
+            inject();
+        }
+    }
     observeWebViewer() {
         document.addEventListener("selectionchange", () => {
             const text = window.getSelection()?.toString()?.trim();
@@ -7462,7 +8065,8 @@ class LocalDictPlugin extends obsidian.Plugin {
                 if (!text || text === this.lastClipboard)
                     return;
                 this.lastClipboard = text;
-                const cleaned = text.replace(/[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~，。！？、；：「」『』（）《》〈〉【】——……￥·～]/g, " ")
+                const cleaned = text
+                    .replace(/[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~，。！？、；：「」『』（）《》〈〉【】——……￥·～]/g, " ")
                     .trim();
                 if (!cleaned)
                     return;
@@ -7542,6 +8146,7 @@ class LocalDictPlugin extends obsidian.Plugin {
     }
     onunload() {
         this.app.workspace.detachLeavesOfType(VIEW_TYPE_WORD);
+        this.observer?.disconnect();
     }
     navigateBack() {
         if (this.settings.history.length === 0)
